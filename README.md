@@ -1,0 +1,34 @@
+# lookout
+
+A Python reimplementation of [Watchtower](https://github.com/containrrr/watchtower)'s core
+functionality: poll running containers, compare against the registry's latest
+image digest, and recreate containers that are stale.
+
+## Documentation
+
+- [docs/index.md](docs/index.md) — quick start (`docker run`/Compose) and full doc index
+- [docs/arguments.md](docs/arguments.md) — every CLI flag and `LOOKOUT_*` env var
+- [docs/container-selection.md](docs/container-selection.md) — include/exclude, monitor-only, no-pull
+- [docs/linked-containers.md](docs/linked-containers.md) — dependency-ordered stop/start
+- [docs/lifecycle-hooks.md](docs/lifecycle-hooks.md) — pre/post-update hooks
+- [docs/private-registries.md](docs/private-registries.md) — registry authentication
+- [docs/notifications.md](docs/notifications.md) — Apprise run-summary notifications
+- [docs/limitations.md](docs/limitations.md) — what's intentionally not implemented in v1
+
+## Development
+
+```
+uv sync
+uv run pytest
+uv run ruff check .
+uv run mypy lookout
+```
+
+## Run
+
+```
+uv run lookout --run-once
+```
+
+Configuration is via `LOOKOUT_*` environment variables (see `lookout/config.py`)
+or a `.env` file.

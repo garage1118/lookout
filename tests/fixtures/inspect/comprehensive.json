@@ -1,0 +1,316 @@
+{
+  "Id": "6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71",
+  "Created": "2026-07-13T10:31:17.811807568Z",
+  "Path": "sleep",
+  "Args": [
+    "3600"
+  ],
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 300021,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-07-13T10:31:17.866681569Z",
+    "FinishedAt": "0001-01-01T00:00:00Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0,
+      "Log": [
+        {
+          "Start": "2026-07-13T06:31:22.989626026-04:00",
+          "End": "2026-07-13T06:31:23.01996748-04:00",
+          "ExitCode": 0,
+          "Output": "ok\n"
+        }
+      ]
+    }
+  },
+  "Image": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+  "ResolvConfPath": "/var/lib/docker/containers/6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71/resolv.conf",
+  "HostnamePath": "/var/lib/docker/containers/6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71/hostname",
+  "HostsPath": "/var/lib/docker/containers/6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71/hosts",
+  "LogPath": "/var/lib/docker/containers/6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71/6747f75447a54fd896f5cd9c8224828097b3b09775bed87f214f7c83d2f5be71-json.log",
+  "Name": "/lookout-recreate-fixture",
+  "RestartCount": 0,
+  "Driver": "overlayfs",
+  "Platform": "linux",
+  "MountLabel": "",
+  "ProcessLabel": "",
+  "AppArmorProfile": "docker-default",
+  "ExecIDs": null,
+  "HostConfig": {
+    "Binds": [
+      "/tmp/claude-1000/-home-david-projects-lookout/2bb34c77-589a-4602-8cb1-bb59392e8dcb/scratchpad/bind-src:/bind-dst:ro",
+      "lookout-test-vol:/vol-dst"
+    ],
+    "ContainerIDFile": "",
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {}
+    },
+    "NetworkMode": "lookout-test-net",
+    "PortBindings": {
+      "80/tcp": [
+        {
+          "HostIp": "",
+          "HostPort": "18080"
+        }
+      ]
+    },
+    "RestartPolicy": {
+      "Name": "unless-stopped",
+      "MaximumRetryCount": 0
+    },
+    "AutoRemove": false,
+    "VolumeDriver": "",
+    "VolumesFrom": null,
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "CapAdd": [
+      "CAP_NET_ADMIN"
+    ],
+    "CapDrop": null,
+    "CgroupnsMode": "private",
+    "Dns": null,
+    "DnsOptions": [],
+    "DnsSearch": [],
+    "ExtraHosts": null,
+    "GroupAdd": null,
+    "IpcMode": "private",
+    "Cgroup": "",
+    "Links": null,
+    "OomScoreAdj": 0,
+    "PidMode": "",
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyRootfs": false,
+    "SecurityOpt": null,
+    "UTSMode": "",
+    "UsernsMode": "",
+    "ShmSize": 67108864,
+    "Runtime": "runc",
+    "Isolation": "",
+    "CpuShares": 0,
+    "Memory": 0,
+    "NanoCpus": 0,
+    "CgroupParent": "",
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": [],
+    "BlkioDeviceReadBps": [],
+    "BlkioDeviceWriteBps": [],
+    "BlkioDeviceReadIOps": [],
+    "BlkioDeviceWriteIOps": [],
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "Devices": [],
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "MemoryReservation": 0,
+    "MemorySwap": 0,
+    "MemorySwappiness": null,
+    "OomKillDisable": null,
+    "PidsLimit": null,
+    "Ulimits": [],
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "IOMaximumIOps": 0,
+    "IOMaximumBandwidth": 0,
+    "MaskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/interrupts",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/sys/devices/virtual/powercap",
+      "/sys/firmware",
+      "/sys/devices/system/cpu/cpu0/thermal_throttle",
+      "/sys/devices/system/cpu/cpu1/thermal_throttle",
+      "/sys/devices/system/cpu/cpu2/thermal_throttle",
+      "/sys/devices/system/cpu/cpu3/thermal_throttle",
+      "/sys/devices/system/cpu/cpu4/thermal_throttle",
+      "/sys/devices/system/cpu/cpu5/thermal_throttle",
+      "/sys/devices/system/cpu/cpu6/thermal_throttle",
+      "/sys/devices/system/cpu/cpu7/thermal_throttle",
+      "/sys/devices/system/cpu/cpu8/thermal_throttle",
+      "/sys/devices/system/cpu/cpu9/thermal_throttle"
+    ],
+    "ReadonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ]
+  },
+  "Storage": {
+    "RootFS": {
+      "Snapshot": {
+        "Name": "overlayfs"
+      }
+    }
+  },
+  "Mounts": [
+    {
+      "Type": "bind",
+      "Source": "/tmp/claude-1000/-home-david-projects-lookout/2bb34c77-589a-4602-8cb1-bb59392e8dcb/scratchpad/bind-src",
+      "Destination": "/bind-dst",
+      "Mode": "ro",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "volume",
+      "Name": "lookout-test-vol",
+      "Source": "/var/lib/docker/volumes/lookout-test-vol/_data",
+      "Destination": "/vol-dst",
+      "Driver": "local",
+      "Mode": "z",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "Config": {
+    "Hostname": "fixture-host",
+    "Domainname": "",
+    "User": "",
+    "AttachStdin": false,
+    "AttachStdout": false,
+    "AttachStderr": false,
+    "ExposedPorts": {
+      "80/tcp": {}
+    },
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "FOO=bar",
+      "BAZ=qux",
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "Cmd": [
+      "sleep",
+      "3600"
+    ],
+    "Healthcheck": {
+      "Test": [
+        "CMD-SHELL",
+        "echo ok"
+      ],
+      "Interval": 5000000000,
+      "Timeout": 2000000000,
+      "StartPeriod": 1000000000,
+      "Retries": 2
+    },
+    "Image": "alpine:latest",
+    "Volumes": null,
+    "WorkingDir": "/",
+    "Entrypoint": null,
+    "Labels": {
+      "com.example.label1": "value1",
+      "com.example.label2": "value2"
+    }
+  },
+  "NetworkSettings": {
+    "SandboxID": "cb180dee673fd80dac6e6a6b4a436afbc69a5ef436db26d1f3d27f3eba1f72ac",
+    "SandboxKey": "/var/run/docker/netns/cb180dee673f",
+    "Ports": {
+      "80/tcp": [
+        {
+          "HostIp": "0.0.0.0",
+          "HostPort": "18080"
+        },
+        {
+          "HostIp": "::",
+          "HostPort": "18080"
+        }
+      ]
+    },
+    "Networks": {
+      "lookout-test-net": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": [
+          "fixture-alias"
+        ],
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "614ac4345c8a7be56177fc0491565d3ff23d22ce92822ffe1205b76ef2989235",
+        "EndpointID": "2a9f0529f5aa3ccdefb44724d9a4dffae9f70ce79c79a75af7d92eeafcb99bc7",
+        "Gateway": "172.18.0.1",
+        "IPAddress": "172.18.0.2",
+        "MacAddress": "62:52:f0:f3:38:90",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": [
+          "lookout-recreate-fixture",
+          "fixture-alias",
+          "6747f75447a5",
+          "fixture-host"
+        ]
+      },
+      "lookout-test-net2": {
+        "IPAMConfig": {
+          "IPv4Address": "",
+          "IPv6Address": ""
+        },
+        "Links": null,
+        "Aliases": [
+          "fixture-alias2"
+        ],
+        "DriverOpts": {},
+        "GwPriority": 0,
+        "NetworkID": "c85d6ca3cc7a1176b395a82dfb320e3f11a488d980415e60603f810ad5a2ab14",
+        "EndpointID": "0783c906e09654ae303f66e10ba9e8961551952454d1f1e2c6439a559eeba094",
+        "Gateway": "172.19.0.1",
+        "IPAddress": "172.19.0.2",
+        "MacAddress": "26:36:61:c5:ee:0a",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": [
+          "lookout-recreate-fixture",
+          "fixture-alias2",
+          "6747f75447a5",
+          "fixture-host"
+        ]
+      }
+    }
+  },
+  "ImageManifestDescriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f",
+    "size": 1022,
+    "annotations": {
+      "com.docker.official-images.bashbrew.arch": "amd64",
+      "org.opencontainers.image.base.name": "scratch",
+      "org.opencontainers.image.created": "2026-06-16T00:01:04Z",
+      "org.opencontainers.image.revision": "398ff0c866d27e9f46f53e48184fe36c674b8897",
+      "org.opencontainers.image.source": "https://github.com/alpinelinux/docker-alpine.git#398ff0c866d27e9f46f53e48184fe36c674b8897:x86_64",
+      "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+      "org.opencontainers.image.version": "3.24.1"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  }
+}
