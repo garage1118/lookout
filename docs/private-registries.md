@@ -102,3 +102,7 @@ how AWS ECR, GCP Artifact Registry, and some other registries are typically auth
 static credentials in `config.json`. If your `config.json` only has a credential helper entry for
 a registry (no plain `auths` entry), lookout falls back to anonymous access for that registry,
 which will fail for anything private.
+
+**`identitytoken` entries** — what `docker login` writes for some SSO-based flows instead of a
+plain password — are also not handled. The base64 `auth` blob still decodes, but the password half
+isn't a usable password, so authentication fails the same as an unsupported credential helper.
