@@ -12,7 +12,10 @@ class Session:
     updated: list[Container] = field(default_factory=list)
     failed: list[tuple[Container, Exception]] = field(default_factory=list)
     stale: list[Container] = field(default_factory=list)
-    skipped: list[Container] = field(default_factory=list)
+    # reason is "pinned" (pinned-by-digest, permanent/expected) or
+    # "check failed" (registry check errored, transient/actionable) — see
+    # the "Skipped" section in summary().
+    skipped: list[tuple[Container, str]] = field(default_factory=list)
 
     def has_activity(self) -> bool:
         """Whether anything notable happened this run — used to skip sending
@@ -56,6 +59,6 @@ class Session:
         if self.skipped:
             lines.append("")
             lines.append("Skipped:")
-            lines.extend(f"  - {c.name}" for c in self.skipped)
+            lines.extend(f"  - {c.name} ({reason})" for c, reason in self.skipped)
 
         return "\n".join(lines)

@@ -70,8 +70,9 @@ Stale (not updated):
 Sections only appear if they have entries. "Stale (not updated)" covers containers found out of
 date but left alone — typically because `--monitor-only` (globally or via label) applies to them.
 Containers that failed mid-update appear under "Failed" with the error instead, and containers
-whose registry check couldn't be completed (pinned-by-digest images, registry errors) appear under
-"Skipped".
+whose registry check couldn't be completed appear under "Skipped" with a reason: `(pinned)` for
+pinned-by-digest images (permanent, expected) or `(check failed)` for a registry check that errored
+(transient, actionable — also logged locally at error level).
 
 If a URL fails to parse or a delivery fails, lookout logs a warning and continues — a broken
 notification target never fails the run itself.

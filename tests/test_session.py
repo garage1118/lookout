@@ -52,11 +52,11 @@ def test_summary_excludes_failed_containers_from_stale_not_updated_section() -> 
 
 
 def test_summary_lists_skipped_containers() -> None:
-    session = Session(skipped=[make_container("pinned")])
+    session = Session(skipped=[(make_container("web"), "pinned")])
     summary = session.summary()
     assert "1 skipped" in summary
     assert "Skipped:" in summary
-    assert "pinned" in summary
+    assert "web (pinned)" in summary
 
 
 def test_has_activity_false_for_empty_session() -> None:
@@ -64,7 +64,7 @@ def test_has_activity_false_for_empty_session() -> None:
 
 
 def test_has_activity_false_for_skipped_only() -> None:
-    assert Session(skipped=[make_container("pinned")]).has_activity() is False
+    assert Session(skipped=[(make_container("web"), "pinned")]).has_activity() is False
 
 
 def test_has_activity_true_for_updated() -> None:

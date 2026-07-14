@@ -48,7 +48,7 @@ def run(
 
     for container in targets:
         if is_pinned(container.image_name):
-            session.skipped.append(container)
+            session.skipped.append((container, "pinned"))
             continue
         try:
             auth = resolve_auth(
@@ -61,7 +61,7 @@ def run(
             )
         except Exception:
             logger.exception("failed to check %s for updates", container.name)
-            session.skipped.append(container)
+            session.skipped.append((container, "check failed"))
             continue
         if _is_stale(docker_client, container, latest_digest):
             session.stale.append(container)

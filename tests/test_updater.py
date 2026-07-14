@@ -232,7 +232,7 @@ def test_run_skips_pinned_images() -> None:
 
     session = run(docker_client, registry_client, settings())
 
-    assert [c.name for c in session.skipped] == ["web"]
+    assert [(c.name, reason) for c, reason in session.skipped] == [("web", "pinned")]
     assert session.stale == []
     assert docker_client.calls == []
 
@@ -244,7 +244,7 @@ def test_run_records_registry_errors_as_skipped() -> None:
 
     session = run(docker_client, registry_client, settings())
 
-    assert [c.name for c in session.skipped] == ["web"]
+    assert [(c.name, reason) for c, reason in session.skipped] == [("web", "check failed")]
     assert session.stale == []
 
 
