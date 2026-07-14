@@ -187,6 +187,60 @@ def test_unset_resource_limits_are_not_carried_over() -> None:
         assert key not in spec.create_kwargs
 
 
+def test_log_config_security_and_process_options_are_carried_over() -> None:
+    # Hand-built stand-in (no live daemon available here) for the remaining
+    # HostConfig/Config fields covered by this mapping.
+    container = Container(
+        id="abc123",
+        name="host-extras2-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {"StopSignal": "SIGUSR1", "StopTimeout": 30},
+            "HostConfig": {
+                "LogConfig": {"Type": "json-file", "Config": {"max-size": "10m"}},
+                "SecurityOpt": ["no-new-privileges"],
+                "GroupAdd": ["audio"],
+                "ReadonlyRootfs": True,
+                "ShmSize": 134217728,
+                "Init": True,
+                "PidMode": "host",
+                "IpcMode": "shareable",
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.create_kwargs["stop_signal"] == "SIGUSR1"
+    assert spec.create_kwargs["stop_timeout"] == 30
+    assert dict(spec.create_kwargs["log_config"])["Type"] == "json-file"
+    assert dict(spec.create_kwargs["log_config"])["Config"] == {"max-size": "10m"}
+    assert spec.create_kwargs["security_opt"] == ["no-new-privileges"]
+    assert spec.create_kwargs["group_add"] == ["audio"]
+    assert spec.create_kwargs["read_only"] is True
+    assert spec.create_kwargs["shm_size"] == 134217728
+    assert spec.create_kwargs["init"] is True
+    assert spec.create_kwargs["pid_mode"] == "host"
+    assert spec.create_kwargs["ipc_mode"] == "shareable"
+
+
+def test_default_ipc_mode_private_is_not_carried_over() -> None:
+    container = Container(
+        id="abc123",
+        name="default-ipc-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={"Config": {}, "HostConfig": {"IpcMode": "private"}},
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "ipc_mode" not in spec.create_kwargs
+
+
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
     spec = build_create_kwargs(container, "sha256:newimage")

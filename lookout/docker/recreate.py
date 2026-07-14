@@ -10,9 +10,6 @@ Known simplifications, not yet handled:
   passed through as network_mode but never validated against a live daemon.
   (`--net=container:<id>` refs are resolved to `container:<name>` by
   DockerClient before reaching this module — see client.py.)
-- LogConfig (driver + options), SecurityOpt, GroupAdd, ReadonlyRootfs,
-  ShmSize, Init, StopSignal/StopTimeout, and PidMode/IpcMode are not
-  carried over.
 - Per-network static IPs (IPAMConfig.IPv4Address) and MAC addresses are
   dropped by _build_networks() — aliases are kept, but a container with a
   pinned IP comes back with a dynamic one.
@@ -26,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from docker.types import Healthcheck, Mount, Ulimit
+from docker.types import Healthcheck, LogConfig, Mount, Ulimit
 
 from lookout.docker.container import Container
 
@@ -75,6 +72,10 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         kwargs["working_dir"] = config["WorkingDir"]
     if config.get("User"):
         kwargs["user"] = config["User"]
+    if config.get("StopSignal"):
+        kwargs["stop_signal"] = config["StopSignal"]
+    if config.get("StopTimeout") is not None:
+        kwargs["stop_timeout"] = config["StopTimeout"]
 
     hostname = config.get("Hostname")
     if hostname and not container.id.startswith(hostname):
@@ -125,6 +126,27 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         kwargs["memswap_limit"] = memory_swap
     if host_config.get("PidsLimit") is not None:
         kwargs["pids_limit"] = host_config["PidsLimit"]
+
+    log_config = host_config.get("LogConfig") or {}
+    if log_config.get("Type"):
+        kwargs["log_config"] = LogConfig(Type=log_config["Type"], Config=log_config.get("Config") or {})
+    if host_config.get("SecurityOpt"):
+        kwargs["security_opt"] = host_config["SecurityOpt"]
+    if host_config.get("GroupAdd"):
+        kwargs["group_add"] = host_config["GroupAdd"]
+    if host_config.get("ReadonlyRootfs"):
+        kwargs["read_only"] = True
+    if host_config.get("ShmSize"):
+        kwargs["shm_size"] = host_config["ShmSize"]
+    if host_config.get("Init") is not None:
+        kwargs["init"] = host_config["Init"]
+    if host_config.get("PidMode"):
+        kwargs["pid_mode"] = host_config["PidMode"]
+    # "private" is IpcMode's own reported default when nothing custom was
+    # set, same treatment as RestartPolicy's "no" above.
+    ipc_mode = host_config.get("IpcMode")
+    if ipc_mode and ipc_mode != "private":
+        kwargs["ipc_mode"] = ipc_mode
 
     healthcheck = _build_healthcheck(config.get("Healthcheck"))
     if healthcheck is not None:

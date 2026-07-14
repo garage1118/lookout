@@ -53,3 +53,7 @@ every real bug in this codebase.
 - [ ] Resource limits (`mem_limit`, `nano_cpus`, `cpu_shares`, `memswap_limit`, `pids_limit`)
       carried over on recreate (`docker/recreate.py`) — confirm against a container started with
       `--memory`/`--cpus`/`--pids-limit` set
+- [ ] `log_config`/`security_opt`/`group_add`/`read_only`/`shm_size`/`init`/`stop_signal`/
+      `stop_timeout`/`pid_mode`/`ipc_mode` carried over on recreate (`docker/recreate.py`) —
+      confirm against a container started with `--log-opt`, `--security-opt`, `--read-only`,
+      `--init`, `--stop-signal`, `--pid=host`, and `--ipc=shareable` set
