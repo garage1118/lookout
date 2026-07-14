@@ -92,6 +92,46 @@ def test_tmpfs_mount_is_not_carried_over() -> None:
     assert "mounts" not in spec.create_kwargs
 
 
+def test_ulimits_sysctls_devices_dns_extra_hosts_tmpfs_are_carried_over() -> None:
+    # Not a captured fixture (no live daemon available here) — a minimal,
+    # hand-built stand-in for the HostConfig shape these fields take in a
+    # real `docker inspect` payload.
+    container = Container(
+        id="abc123",
+        name="host-extras-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {
+                "Ulimits": [{"Name": "nofile", "Soft": 1024, "Hard": 2048}],
+                "Sysctls": {"net.core.somaxconn": "1024"},
+                "Devices": [
+                    {
+                        "PathOnHost": "/dev/sda",
+                        "PathInContainer": "/dev/xvda",
+                        "CgroupPermissions": "rwm",
+                    }
+                ],
+                "Dns": ["8.8.8.8"],
+                "ExtraHosts": ["somehost:162.242.195.82"],
+                "Tmpfs": {"/tmp/scratch": "size=64m"},
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    ulimit = spec.create_kwargs["ulimits"][0]
+    assert (ulimit["Name"], ulimit["Soft"], ulimit["Hard"]) == ("nofile", 1024, 2048)
+    assert spec.create_kwargs["sysctls"] == {"net.core.somaxconn": "1024"}
+    assert spec.create_kwargs["devices"] == ["/dev/sda:/dev/xvda:rwm"]
+    assert spec.create_kwargs["dns"] == ["8.8.8.8"]
+    assert spec.create_kwargs["extra_hosts"] == {"somehost": "162.242.195.82"}
+    assert spec.create_kwargs["tmpfs"] == {"/tmp/scratch": "size=64m"}
+
+
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
     spec = build_create_kwargs(container, "sha256:newimage")

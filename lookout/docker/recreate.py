@@ -6,7 +6,6 @@ tests/test_recreate.py) rather than assumed from the API docs alone.
 
 Known simplifications, not yet handled:
 - SELinux mount relabeling ('z'/'Z' bind mode) is dropped.
-- Ulimits, sysctls, devices, dns, extra_hosts, tmpfs are not carried over.
 - `--net=container:<id>` and other non-bridge/custom NetworkMode values are
   passed through as network_mode but never validated against a live daemon.
 - Resource limits (Memory, NanoCpus/CpuShares, MemorySwap, PidsLimit) are
@@ -27,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from docker.types import Healthcheck, Mount
+from docker.types import Healthcheck, Mount, Ulimit
 
 from lookout.docker.container import Container
 
@@ -95,6 +94,23 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         kwargs["cap_drop"] = host_config["CapDrop"]
     if host_config.get("Privileged"):
         kwargs["privileged"] = True
+
+    if host_config.get("Ulimits"):
+        kwargs["ulimits"] = [Ulimit(**u) for u in host_config["Ulimits"]]
+    if host_config.get("Sysctls"):
+        kwargs["sysctls"] = host_config["Sysctls"]
+    if host_config.get("Devices"):
+        kwargs["devices"] = [
+            f"{d['PathOnHost']}:{d['PathInContainer']}:{d['CgroupPermissions']}"
+            for d in host_config["Devices"]
+        ]
+    if host_config.get("Dns"):
+        kwargs["dns"] = host_config["Dns"]
+    if host_config.get("ExtraHosts"):
+        # HostConfig reports "host:ip" strings; create() wants a {host: ip} dict.
+        kwargs["extra_hosts"] = dict(h.split(":", 1) for h in host_config["ExtraHosts"])
+    if host_config.get("Tmpfs"):
+        kwargs["tmpfs"] = host_config["Tmpfs"]
 
     healthcheck = _build_healthcheck(config.get("Healthcheck"))
     if healthcheck is not None:

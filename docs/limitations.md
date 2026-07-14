@@ -27,7 +27,6 @@ or acts on it — setting it has no effect.
 replacement. The following are **not** carried over to the recreated container:
 
 - SELinux bind-mount relabeling (`:z`/`:Z` mount options)
-- Ulimits, sysctls, device mappings, DNS settings, extra hosts, tmpfs mounts
 - `--net=container:<id>` and other non-bridge/custom `NetworkMode` values are passed through as
   `network_mode` but not validated against a live daemon
 - Resource limits (`Memory`, `NanoCpus`/`CpuShares`, `MemorySwap`, `PidsLimit`) — a recreated
