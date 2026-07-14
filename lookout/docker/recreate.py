@@ -119,10 +119,19 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
     return RecreateSpec(create_kwargs=kwargs, networks=networks)
 
 
+_SUPPORTED_MOUNT_TYPES = {"bind", "volume"}
+
+
 def _build_mounts(raw_mounts: list[dict[str, Any]]) -> list[Mount]:
     mounts = []
     for m in raw_mounts:
         mount_type = m.get("Type", "volume")
+        if mount_type not in _SUPPORTED_MOUNT_TYPES:
+            # tmpfs (and anything else Docker might report here) isn't
+            # carried over — skip explicitly rather than relying on the
+            # resulting empty source being harmlessly falsy past docker-py's
+            # own tmpfs handling.
+            continue
         source = m.get("Name") if mount_type == "volume" else m.get("Source")
         mounts.append(
             Mount(

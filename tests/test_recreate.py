@@ -68,6 +68,30 @@ def test_comprehensive_container_bind_and_named_volume_mounts() -> None:
     assert volume["ReadOnly"] is False
 
 
+def test_tmpfs_mount_is_not_carried_over() -> None:
+    # Not a captured fixture (no live daemon available here) — a minimal,
+    # hand-built stand-in for Docker's documented tmpfs entry shape in
+    # `docker inspect`'s Mounts array, to pin down that unsupported mount
+    # types are skipped explicitly rather than passed through with an
+    # accidentally-harmless empty source.
+    container = Container(
+        id="abc123",
+        name="tmpfs-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {},
+            "Mounts": [{"Type": "tmpfs", "Destination": "/tmp/scratch", "RW": True}],
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "mounts" not in spec.create_kwargs
+
+
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
     spec = build_create_kwargs(container, "sha256:newimage")
