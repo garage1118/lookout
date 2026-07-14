@@ -6,14 +6,14 @@ interface.
 
 ## Settings
 
-Set one or more Apprise service URLs as a JSON array in `LOOKOUT_NOTIFICATION_URLS` (there's no
-CLI flag for this — see [Arguments](arguments.md)):
+Set one or more Apprise service URLs as a comma-separated string in `LOOKOUT_NOTIFICATION_URLS`
+(there's no CLI flag for this — see [Arguments](arguments.md)):
 
 ```bash
 docker run -d \
   --name lookout \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e LOOKOUT_NOTIFICATION_URLS='["slack://token_a/token_b/token_c", "mailto://user:pass@example.com"]' \
+  -e LOOKOUT_NOTIFICATION_URLS='slack://token_a/token_b/token_c,mailto://user:pass@example.com' \
   lookout
 ```
 
@@ -33,7 +33,7 @@ webhooks require one and aren't available on personal Gmail accounts.
 3. Set the Apprise URL to `tgram://<bot_token>/<chat_id>`:
 
 ```bash
--e LOOKOUT_NOTIFICATION_URLS='["tgram://123456789:AAAAbcdefg_hijklmnop/12315544"]'
+-e LOOKOUT_NOTIFICATION_URLS='tgram://123456789:AAAAbcdefg_hijklmnop/12315544'
 ```
 
 If `LOOKOUT_NOTIFICATION_URLS` is empty (the default), no notification is attempted and nothing is

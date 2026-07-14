@@ -6,10 +6,10 @@ env-var-derived value — there's no way to "unset" an env var from the CLI, onl
 on top of it.
 
 List-valued environment variables (`LOOKOUT_INCLUDE_NAMES`, `LOOKOUT_EXCLUDE_NAMES`,
-`LOOKOUT_NOTIFICATION_URLS`) take a **JSON array**, not a comma-separated string:
+`LOOKOUT_NOTIFICATION_URLS`) take a **comma-separated string**, not a JSON array:
 
 ```bash
-LOOKOUT_INCLUDE_NAMES='["web", "worker"]'
+LOOKOUT_INCLUDE_NAMES=web,worker
 ```
 
 ## Run once
@@ -40,8 +40,8 @@ Only monitor containers with this name. Repeatable.
 ```text
             Argument: --include (repeatable)
 Environment Variable: LOOKOUT_INCLUDE_NAMES
-                Type: JSON array of strings
-             Default: [] (monitor all containers)
+                Type: Comma-separated string
+             Default: (empty; monitor all containers)
 ```
 
 ## Exclude
@@ -52,8 +52,8 @@ enable label — see [Container selection](container-selection.md) for the full 
 ```text
             Argument: --exclude (repeatable)
 Environment Variable: LOOKOUT_EXCLUDE_NAMES
-                Type: JSON array of strings
-             Default: []
+                Type: Comma-separated string
+             Default: (empty)
 ```
 
 ## Label enable
@@ -148,8 +148,8 @@ only; no CLI flag currently exposes it. See [Notifications](notifications.md).
 ```text
             Argument: N/A
 Environment Variable: LOOKOUT_NOTIFICATION_URLS
-                Type: JSON array of Apprise service URL strings
-             Default: [] (no notifications sent)
+                Type: Comma-separated string of Apprise service URLs
+             Default: (empty; no notifications sent)
 ```
 
 ## Notify only on change

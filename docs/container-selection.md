@@ -57,8 +57,8 @@ lookout --include web --include worker --exclude scratch-db
 ```
 
 Unlike Watchtower, which takes container names as positional CLI arguments, lookout uses explicit
-`--include`/`--exclude` flags (or `LOOKOUT_INCLUDE_NAMES`/`LOOKOUT_EXCLUDE_NAMES`, as JSON arrays).
-Exclude always wins: a name in both lists is excluded.
+`--include`/`--exclude` flags (or `LOOKOUT_INCLUDE_NAMES`/`LOOKOUT_EXCLUDE_NAMES`, as comma-separated
+strings). Exclude always wins: a name in both lists is excluded.
 
 ## Monitor only
 
