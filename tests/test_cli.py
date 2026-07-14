@@ -5,6 +5,7 @@ from typing import Any
 from click.testing import CliRunner
 
 import lookout.cli as cli_module
+from lookout.core.session import Session
 
 
 class FakeDockerClient:
@@ -24,7 +25,7 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         cli_module,
         "run_update",
-        lambda dc, rc, settings: captured_settings.append(settings) or "session",
+        lambda dc, rc, settings: captured_settings.append(settings) or Session(),
     )
     monkeypatch.setattr(
         cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
@@ -71,7 +72,7 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         cli_module,
         "run_update",
-        lambda dc, rc, settings: captured_settings.append(settings) or "session",
+        lambda dc, rc, settings: captured_settings.append(settings) or Session(),
     )
     monkeypatch.setattr(
         cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
@@ -92,7 +93,7 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
 def test_interval_mode_invokes_scheduler_with_parsed_interval(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
-    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
     monkeypatch.setattr(
         cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
     )
@@ -115,7 +116,7 @@ def test_interval_mode_invokes_scheduler_with_parsed_interval(monkeypatch: Any) 
 def test_notify_on_startup_calls_send_startup_once(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
-    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
     monkeypatch.setattr(
         cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
     )
@@ -133,7 +134,7 @@ def test_notify_on_startup_calls_send_startup_once(monkeypatch: Any) -> None:
 def test_notify_on_startup_not_called_when_flag_omitted(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
-    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
     monkeypatch.setattr(
         cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
     )

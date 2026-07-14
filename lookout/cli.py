@@ -13,6 +13,8 @@ from lookout.notifications.notify import send_startup
 from lookout.registry.digest import RegistryClient
 from lookout.scheduler import run_forever
 
+logger = logging.getLogger(__name__)
+
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--interval", type=int, default=None, help="Poll interval in seconds")
@@ -106,6 +108,11 @@ def main(
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%SZ",
     )
+    # httpx logs one line per HTTP request at INFO, which drowns out lookout's own
+    # INFO-level summaries with registry request noise. Keep it available for
+    # LOOKOUT_LOG_LEVEL=DEBUG troubleshooting, quiet otherwise.
+    if settings.log_level.upper() != "DEBUG":
+        logging.getLogger("httpx").setLevel(logging.WARNING)
 
     if settings.notify_on_startup:
         send_startup(settings.notification_urls)
@@ -115,6 +122,7 @@ def main(
 
     def job() -> None:
         session = run_update(docker_client, registry_client, settings)
+        logger.info(session.summary())
         send_notifications(session, settings.notification_urls, settings.notify_only_on_change)
 
     if run_once:
