@@ -49,8 +49,8 @@ implemented — only pre-update/post-update. Hook commands have no execution tim
 
 ## Notifications
 
-No message templating, no notification log-level filtering, no startup notification, and no
-"only notify on changes" toggle — see [Notifications](notifications.md).
+No message templating and no notification log-level filtering — see
+[Notifications](notifications.md).
 
 ## Labels
 
