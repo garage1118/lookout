@@ -50,3 +50,6 @@ every real bug in this codebase.
       (`docker/client.py` `_resolve_network_mode_container_ref`) — confirm against a container
       whose network mode is `container:<other-container>`, and confirm the target surviving its
       own recreation doesn't break this one
+- [ ] Resource limits (`mem_limit`, `nano_cpus`, `cpu_shares`, `memswap_limit`, `pids_limit`)
+      carried over on recreate (`docker/recreate.py`) — confirm against a container started with
+      `--memory`/`--cpus`/`--pids-limit` set

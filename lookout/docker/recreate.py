@@ -10,8 +10,6 @@ Known simplifications, not yet handled:
   passed through as network_mode but never validated against a live daemon.
   (`--net=container:<id>` refs are resolved to `container:<name>` by
   DockerClient before reaching this module — see client.py.)
-- Resource limits (Memory, NanoCpus/CpuShares, MemorySwap, PidsLimit) are
-  dropped, silently removing a recreated container's limits.
 - LogConfig (driver + options), SecurityOpt, GroupAdd, ReadonlyRootfs,
   ShmSize, Init, StopSignal/StopTimeout, and PidMode/IpcMode are not
   carried over.
@@ -113,6 +111,20 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         kwargs["extra_hosts"] = dict(h.split(":", 1) for h in host_config["ExtraHosts"])
     if host_config.get("Tmpfs"):
         kwargs["tmpfs"] = host_config["Tmpfs"]
+
+    if host_config.get("Memory"):
+        kwargs["mem_limit"] = host_config["Memory"]
+    if host_config.get("NanoCpus"):
+        kwargs["nano_cpus"] = host_config["NanoCpus"]
+    if host_config.get("CpuShares"):
+        kwargs["cpu_shares"] = host_config["CpuShares"]
+    # 0 means "not set" (the common case); -1 means "unlimited swap", which
+    # is a meaningful explicit value worth carrying over, not a default.
+    memory_swap = host_config.get("MemorySwap")
+    if memory_swap:
+        kwargs["memswap_limit"] = memory_swap
+    if host_config.get("PidsLimit") is not None:
+        kwargs["pids_limit"] = host_config["PidsLimit"]
 
     healthcheck = _build_healthcheck(config.get("Healthcheck"))
     if healthcheck is not None:

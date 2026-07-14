@@ -132,6 +132,61 @@ def test_ulimits_sysctls_devices_dns_extra_hosts_tmpfs_are_carried_over() -> Non
     assert spec.create_kwargs["tmpfs"] == {"/tmp/scratch": "size=64m"}
 
 
+def test_resource_limits_are_carried_over() -> None:
+    # Hand-built stand-in (no live daemon available here) for HostConfig's
+    # resource-limit fields.
+    container = Container(
+        id="abc123",
+        name="resource-limits-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {
+                "Memory": 134217728,
+                "NanoCpus": 500000000,
+                "CpuShares": 512,
+                "MemorySwap": -1,
+                "PidsLimit": 100,
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.create_kwargs["mem_limit"] == 134217728
+    assert spec.create_kwargs["nano_cpus"] == 500000000
+    assert spec.create_kwargs["cpu_shares"] == 512
+    assert spec.create_kwargs["memswap_limit"] == -1
+    assert spec.create_kwargs["pids_limit"] == 100
+
+
+def test_unset_resource_limits_are_not_carried_over() -> None:
+    container = Container(
+        id="abc123",
+        name="no-resource-limits-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {
+                "Memory": 0,
+                "NanoCpus": 0,
+                "CpuShares": 0,
+                "MemorySwap": 0,
+                "PidsLimit": None,
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    for key in ("mem_limit", "nano_cpus", "cpu_shares", "memswap_limit", "pids_limit"):
+        assert key not in spec.create_kwargs
+
+
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
     spec = build_create_kwargs(container, "sha256:newimage")
