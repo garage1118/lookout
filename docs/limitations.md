@@ -31,8 +31,12 @@ replacement. The following are **not** carried over to the recreated container:
   but not validated against a live daemon. `--net=container:<id>` specifically is resolved to
   `container:<name>` at listing time so the reference survives the target container itself being
   recreated (which changes its id) — see `DockerClient._resolve_network_mode_container_ref()`
-Conversely, containers published with `-P` get their ephemeral host ports **pinned** on recreate
-(the previously assigned host port is reused verbatim instead of a fresh one being chosen).
+
+Separately, containers published with `-P` get their ephemeral host ports **pinned** on recreate:
+the previously assigned host port is reused verbatim instead of a fresh one being chosen. This
+isn't a lookout gap — `docker inspect` only ever records the concrete host port a container ended
+up with, so there's no way after the fact to tell "chosen by `-P`" apart from "fixed via
+`-p hostport:containerport`". Watchtower has the identical behavior for the identical reason.
 
 Also not implemented: `--remove-volumes` (removing anonymous volumes on update),
 `--include-stopped`/`--include-restarting`/`--revive-stopped` (lookout only ever considers

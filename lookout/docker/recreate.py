@@ -10,9 +10,13 @@ Known simplifications, not yet handled:
   passed through as network_mode but never validated against a live daemon.
   (`--net=container:<id>` refs are resolved to `container:<name>` by
   DockerClient before reaching this module — see client.py.)
-- Ephemeral host ports published with `-P` are pinned to their previously
-  assigned host port by _build_ports(), rather than getting a fresh
-  ephemeral port on recreate.
+- Ephemeral host ports published with `-P` come back pinned to whatever host
+  port they'd previously been assigned, rather than getting a fresh one on
+  recreate. This isn't a lookout gap to close: `docker inspect`'s
+  PortBindings only ever records the concrete host port a container ended up
+  with, with no way to tell in hindsight whether it came from `-P` or a fixed
+  `-p hostport:containerport`. Watchtower has the exact same behavior for the
+  same reason (it replays the original PortBindings verbatim too).
 """
 
 from __future__ import annotations
