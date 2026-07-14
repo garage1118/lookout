@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from lookout.config import Settings
-from lookout.core.updater import run, stop_order
 from lookout.core.lifecycle import POST_UPDATE_LABEL
+from lookout.core.updater import run, stop_order
 from lookout.docker.container import DEPENDS_ON_LABEL, MONITOR_ONLY_LABEL, Container
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 import docker as docker_sdk
 
@@ -48,7 +48,7 @@ class DockerPyClient:
             containers.append(Container.from_inspect(attrs, repo_digests=repo_digests))
         return containers
 
-    def _resolve_network_mode_container_ref(self, attrs: dict) -> dict:
+    def _resolve_network_mode_container_ref(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """If HostConfig.NetworkMode is "container:<id>", rewrite the id to
         that target container's current name.
 

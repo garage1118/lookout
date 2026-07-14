@@ -88,7 +88,15 @@ def test_selinux_shared_relabel_bind_mount_goes_through_legacy_binds() -> None:
     # just "z" (shared SELinux label), analogous to the real fixture's
     # volume mount but for a bind, and read-write.
     container = _container_with_mounts(
-        [{"Type": "bind", "Source": "/host/shared", "Destination": "/data", "Mode": "z", "RW": True}]
+        [
+            {
+                "Type": "bind",
+                "Source": "/host/shared",
+                "Destination": "/data",
+                "Mode": "z",
+                "RW": True,
+            }
+        ]
     )
 
     spec = build_create_kwargs(container, "sha256:newimage")
@@ -102,7 +110,15 @@ def test_selinux_private_relabel_readonly_bind_mount_goes_through_legacy_binds()
     # rw/ro token is re-derived from RW rather than trusted from Mode, since
     # here Mode only has "ro" alongside "Z", not "rw".
     container = _container_with_mounts(
-        [{"Type": "bind", "Source": "/host/priv", "Destination": "/priv", "Mode": "ro,Z", "RW": False}]
+        [
+            {
+                "Type": "bind",
+                "Source": "/host/priv",
+                "Destination": "/priv",
+                "Mode": "ro,Z",
+                "RW": False,
+            }
+        ]
     )
 
     spec = build_create_kwargs(container, "sha256:newimage")
@@ -139,7 +155,15 @@ def test_mount_without_relabel_flag_is_unaffected_by_the_split() -> None:
     # A plain "ro" Mode (no z/Z) must still go through the ordinary Mount
     # path, not be swept into binds by mistake.
     container = _container_with_mounts(
-        [{"Type": "bind", "Source": "/host/plain", "Destination": "/plain", "Mode": "ro", "RW": False}]
+        [
+            {
+                "Type": "bind",
+                "Source": "/host/plain",
+                "Destination": "/plain",
+                "Mode": "ro",
+                "RW": False,
+            }
+        ]
     )
 
     spec = build_create_kwargs(container, "sha256:newimage")
@@ -170,8 +194,20 @@ def test_mixed_relabeled_and_plain_mounts_split_correctly() -> None:
     # group clobbering the other.
     container = _container_with_mounts(
         [
-            {"Type": "bind", "Source": "/host/plain", "Destination": "/plain", "Mode": "ro", "RW": False},
-            {"Type": "bind", "Source": "/host/shared", "Destination": "/shared", "Mode": "z", "RW": True},
+            {
+                "Type": "bind",
+                "Source": "/host/plain",
+                "Destination": "/plain",
+                "Mode": "ro",
+                "RW": False,
+            },
+            {
+                "Type": "bind",
+                "Source": "/host/shared",
+                "Destination": "/shared",
+                "Mode": "z",
+                "RW": True,
+            },
             {
                 "Type": "volume",
                 "Name": "priv-vol",

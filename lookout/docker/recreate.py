@@ -134,7 +134,9 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
 
     log_config = host_config.get("LogConfig") or {}
     if log_config.get("Type"):
-        kwargs["log_config"] = LogConfig(Type=log_config["Type"], Config=log_config.get("Config") or {})
+        kwargs["log_config"] = LogConfig(
+            Type=log_config["Type"], Config=log_config.get("Config") or {}
+        )
     if host_config.get("SecurityOpt"):
         kwargs["security_opt"] = host_config["SecurityOpt"]
     if host_config.get("GroupAdd"):
