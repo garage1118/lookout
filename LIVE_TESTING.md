@@ -85,11 +85,24 @@ every real bug in this codebase.
       mismatch and recreated: new container id, running the newly-tagged image, counted in
       `updated`. No bugs found — the guard added in the original code review pass behaves exactly as
       documented in both directions.
+- [x] Notifications via Apprise (`notifications/notify.py`) — confirmed live 2026-07-14. Telegram
+      was the original target (a real bot via `@BotFather`), but `api.telegram.org` turned out to be
+      network-blocked from this host (TCP connects, TLS handshake gets reset — confirmed general
+      internet egress works fine via a Docker Hub request, so this is specific to Telegram, not a
+      general network issue). Fell back to a local HTTP listener and Apprise's generic `json://`
+      webhook scheme instead, which still exercises the real risk (URL parsing, payload
+      construction, real network delivery — not a mocked Apprise object). Confirmed: `send_startup()`
+      delivers the right title/body; `send()` delivers a real `Session.summary()` render matching
+      updated/failed/skipped containers; a malformed URL mixed in with a valid one logs a warning
+      without crashing and doesn't block delivery to the valid one; `only_on_change=True` correctly
+      sends zero requests for a no-activity session. No bugs found. Doesn't cover any
+      service-specific payload quirks (Slack/Discord/Telegram's own expected shape) since the
+      receiver was generic JSON, not a real chat service — worth a real Telegram/Slack run from a
+      network that isn't blocking it, if that matters before 1.0.
 
 ## Not yet confirmed live
 
 - [ ] Lifecycle hooks: pre-update / post-update (`core/lifecycle.py`) — also has no unit tests
-- [ ] Notifications via Apprise (`notifications/notify.py`)
 - [ ] Private-registry credential reading from `~/.docker/config.json` (`registry/auth.py`)
 - [ ] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — documented as
       best-effort/unverified
