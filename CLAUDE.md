@@ -9,10 +9,9 @@ core functionality: poll running Docker containers, compare each one's running i
 registry's latest digest for the same tag, and recreate containers that are stale — preserving
 their runtime config (mounts, networks, restart policy, healthcheck, etc.).
 
-The full architecture, module layout, data flow, and rationale (including *why* this is a Python
-rewrite rather than a Go fix) live in `watchtower-py-handoff.md` — read it before making structural
-changes. The original Go project can be cloned to `watchtower/` (gitignored) for reference if
-needed; it is not part of this codebase.
+This is a from-scratch Python rewrite of Watchtower, not a port or fork of its code — see
+"Architecture" below for module layout and data flow. The original Go project can be cloned to
+`watchtower/` (gitignored) for reference if needed; it is not part of this codebase.
 
 v1 non-goals: Docker Swarm service updates, an HTTP API/webhook trigger, multi-host/fleet
 management (single Docker daemon per instance).
@@ -136,10 +135,8 @@ Each module's job:
   were actually found — fixture/fake-based tests alone did not catch any of them: the
   network-attachment bug in `recreate.py`, the GHCR bogus-scope bug in `digest.py`, and the
   RepoDigests-orphaning bug in `core/updater._is_stale()` (only reproducible by rebuilding and
-  repushing the *same tag* on the same host running lookout — see `testing/mutator/`). When
-  changing those modules, prefer re-running a live check over trusting the mocked suite alone.
-- **`testing/mutator/`** is a small scaffold (Dockerfile + `push.sh`/`watch.sh`/`verify.sh`) for
-  exactly that kind of live check: it bakes a build-time timestamp into `/version` so every rebuild
-  changes the digest under a fixed tag, letting you prove lookout actually detects and recreates
-  against a real registry. Note `registry/digest.py` always probes `https://`, so this only proves
-  anything end-to-end against a registry with real TLS — see the scaffold's own README.
+  repushing the *same tag* on the same host running lookout, e.g. by baking a build-time timestamp
+  into the image so every rebuild changes the digest under a fixed tag). When changing those
+  modules, prefer re-running a live check over trusting the mocked suite alone. Note
+  `registry/digest.py` always probes `https://`, so proving the update path end-to-end requires a
+  registry with real TLS.
