@@ -1,0 +1,50 @@
+site_name: lookout
+site_description: Automatic Docker container updates.
+site_url: https://garage1118.github.io/lookout/
+repo_url: https://github.com/garage1118/lookout/
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Arguments: arguments.md
+  - Container selection: container-selection.md
+  - Linked containers: linked-containers.md
+  - Lifecycle hooks: lifecycle-hooks.md
+  - Private registries: private-registries.md
+  - Notifications: notifications.md
+  - Limitations: limitations.md
+
+plugins:
+  - search
