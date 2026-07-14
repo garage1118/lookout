@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from lookout.config import Settings
 
 
@@ -28,3 +31,21 @@ def test_unset_list_fields_default_to_empty(monkeypatch) -> None:  # type: ignor
     assert settings.include_names == []
     assert settings.exclude_names == []
     assert settings.notification_urls == []
+
+
+def test_non_positive_interval_seconds_rejected() -> None:
+    # interval_seconds <= 0 would turn run_forever's sleep loop into a hot
+    # loop with no sleep at all.
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, interval_seconds=0)
+
+
+def test_non_positive_interval_seconds_rejected_on_cli_override() -> None:
+    settings = Settings(_env_file=None)
+    with pytest.raises(ValidationError):
+        settings.interval_seconds = -5
+
+
+def test_negative_stop_timeout_seconds_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, stop_timeout_seconds=-1)

@@ -7,9 +7,11 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration, sourced from LOOKOUT_* env vars (CLI flags override)."""
 
-    model_config = SettingsConfigDict(env_prefix="LOOKOUT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="LOOKOUT_", env_file=".env", extra="ignore", validate_assignment=True
+    )
 
-    interval_seconds: int = Field(default=300, description="Poll interval, in seconds")
+    interval_seconds: int = Field(default=300, gt=0, description="Poll interval, in seconds")
     cron_schedule: str | None = Field(
         default=None, description="Cron expression; overrides interval"
     )
@@ -28,7 +30,7 @@ class Settings(BaseSettings):
         default=False, description="Never pull; only recreate from images already present"
     )
 
-    stop_timeout_seconds: int = Field(default=10)
+    stop_timeout_seconds: int = Field(default=10, ge=0)
 
     notification_urls: Annotated[list[str], NoDecode] = Field(
         default_factory=list, description="Apprise-format notification URLs"
