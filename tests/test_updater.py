@@ -34,6 +34,7 @@ class FakeDockerClient:
         self.stop_fail: set[str] = set()
         self.removed_images: list[str] = []
         self.found_image_id: str | None = None
+        self.local_image_id = "sha256:local"
 
     def list_containers(self) -> list[Container]:
         return list(self._containers)
@@ -44,7 +45,7 @@ class FakeDockerClient:
 
     def get_image_id(self, image_name: str) -> str:
         self.calls.append(f"get_image_id:{image_name}")
-        return "sha256:local"
+        return self.local_image_id
 
     def find_local_image_id(self, image_name: str, digest: str) -> str | None:
         self.calls.append(f"find_local_image_id:{image_name}:{digest}")
@@ -131,6 +132,30 @@ def test_run_leaves_fresh_containers_untouched() -> None:
     assert session.stale == []
     assert session.updated == []
     assert docker_client.calls == []
+
+
+def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
+    # Regression test: staleness is judged against the registry digest, but
+    # --no-pull recreates onto whatever's cached locally under the tag. If
+    # nothing external has pulled a newer image, that's the same image
+    # already running, and recreating onto it would restart-loop the
+    # container every poll forever with a false "updated" notification.
+    container = make_container("web", repo_digests=["myapp@sha256:old"])
+    docker_client = FakeDockerClient([container])
+    docker_client.local_image_id = container.image_id
+    registry_client = FakeRegistryClient({"myapp:latest": "sha256:new"})
+
+    session = run(docker_client, registry_client, settings(no_pull=True))
+
+    assert [c.name for c in session.stale] == ["web"]
+    assert session.updated == []
+    assert session.failed == []
+    assert docker_client.calls == [
+        "find_local_image_id:myapp:latest:sha256:new",
+        "stop:web",
+        "get_image_id:myapp:latest",
+        "start:web",
+    ]
 
 
 def test_run_falls_back_to_local_image_lookup_when_repo_digests_orphaned() -> None:

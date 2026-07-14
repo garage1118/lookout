@@ -89,6 +89,18 @@ def run(
                 if no_pull
                 else docker_client.pull_image(container.image_name)
             )
+            if new_image_id == container.image_id:
+                # Nothing to actually update onto. Most commonly hit with
+                # --no-pull: staleness is judged against the registry digest,
+                # but the update path uses whatever image is cached locally
+                # under the tag — if nothing external has pulled a newer one,
+                # that's the same image the container already runs, and
+                # recreating onto it would restart-loop the container every
+                # poll forever. Restart it in place instead and leave it
+                # counted as stale-not-updated. Harmless safety net on the
+                # pull path too, where it should never trigger in practice.
+                docker_client.start(container)
+                continue
             new_container = docker_client.recreate(container, new_image_id)
             docker_client.start(new_container)
             lifecycle.post_update(docker_client, new_container)
