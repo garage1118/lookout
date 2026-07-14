@@ -43,3 +43,10 @@ every real bug in this codebase.
       needs confirming alongside lifecycle hooks
 - [ ] Explicit tmpfs-mount skip in recreate (`docker/recreate.py` `_build_mounts`) — confirm a
       container with a tmpfs mount recreates cleanly without it
+- [ ] Ulimits/sysctls/devices/dns/extra_hosts/tmpfs carried over on recreate (`docker/recreate.py`)
+      — needs a container actually using each of these to confirm the new create-kwargs are
+      accepted by a live daemon
+- [ ] `container:<id>` NetworkMode resolved to `container:<name>` at listing time
+      (`docker/client.py` `_resolve_network_mode_container_ref`) — confirm against a container
+      whose network mode is `container:<other-container>`, and confirm the target surviving its
+      own recreation doesn't break this one

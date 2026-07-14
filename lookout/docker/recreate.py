@@ -6,8 +6,10 @@ tests/test_recreate.py) rather than assumed from the API docs alone.
 
 Known simplifications, not yet handled:
 - SELinux mount relabeling ('z'/'Z' bind mode) is dropped.
-- `--net=container:<id>` and other non-bridge/custom NetworkMode values are
+- Non-bridge/custom NetworkMode values (host, container:<name>, ...) are
   passed through as network_mode but never validated against a live daemon.
+  (`--net=container:<id>` refs are resolved to `container:<name>` by
+  DockerClient before reaching this module — see client.py.)
 - Resource limits (Memory, NanoCpus/CpuShares, MemorySwap, PidsLimit) are
   dropped, silently removing a recreated container's limits.
 - LogConfig (driver + options), SecurityOpt, GroupAdd, ReadonlyRootfs,

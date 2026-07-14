@@ -44,8 +44,33 @@ class DockerPyClient:
         containers = []
         for c in raw:
             repo_digests = self._repo_digests(c.attrs["Image"])
-            containers.append(Container.from_inspect(c.attrs, repo_digests=repo_digests))
+            attrs = self._resolve_network_mode_container_ref(c.attrs)
+            containers.append(Container.from_inspect(attrs, repo_digests=repo_digests))
         return containers
+
+    def _resolve_network_mode_container_ref(self, attrs: dict) -> dict:
+        """If HostConfig.NetworkMode is "container:<id>", rewrite the id to
+        that target container's current name.
+
+        Docker stores this reference by id, which goes stale if the target
+        container is itself recreated (new id, e.g. also updated by lookout)
+        before this one gets recreated — the id-based reference would then
+        point at nothing. A name-based reference survives that, since Docker
+        resolves container-mode names at create time same as it does for
+        --net=container:<name>. Watchtower does this same substitution for
+        the same reason.
+        """
+        host_config = attrs.get("HostConfig") or {}
+        mode = host_config.get("NetworkMode") or ""
+        if not mode.startswith("container:"):
+            return attrs
+        target_id = mode.split(":", 1)[1]
+        try:
+            target_name = self._client.containers.get(target_id).name
+        except docker_sdk.errors.NotFound:
+            return attrs
+        host_config["NetworkMode"] = f"container:{target_name}"
+        return attrs
 
     def _repo_digests(self, image_id: str) -> list[str]:
         try:

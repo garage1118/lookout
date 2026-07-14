@@ -27,8 +27,10 @@ or acts on it — setting it has no effect.
 replacement. The following are **not** carried over to the recreated container:
 
 - SELinux bind-mount relabeling (`:z`/`:Z` mount options)
-- `--net=container:<id>` and other non-bridge/custom `NetworkMode` values are passed through as
-  `network_mode` but not validated against a live daemon
+- Other non-bridge/custom `NetworkMode` values (e.g. `host`) are passed through as `network_mode`
+  but not validated against a live daemon. `--net=container:<id>` specifically is resolved to
+  `container:<name>` at listing time so the reference survives the target container itself being
+  recreated (which changes its id) — see `DockerClient._resolve_network_mode_container_ref()`
 - Resource limits (`Memory`, `NanoCpus`/`CpuShares`, `MemorySwap`, `PidsLimit`) — a recreated
   container silently loses its limits
 - `LogConfig` (driver + options), `SecurityOpt`, `GroupAdd`, `ReadonlyRootfs`, `ShmSize`, `Init`,
