@@ -83,6 +83,34 @@ def _container_with_mounts(mounts: list[dict[str, object]]) -> Container:
     )
 
 
+def test_selinux_relabel_fixture_binds_and_mounts_split_correctly() -> None:
+    # Captured live against a real SELinux-enforcing daemon (RHEL 9,
+    # `getenforce` == Enforcing) -- confirmed the recreated container
+    # preserves correct SELinux behavior: the "rw,z" bind readable and
+    # writable, the "ro,Z" bind readable but not writable, the plain
+    # unlabeled bind still denied by SELinux (unchanged), and the "z"
+    # volume readable and writable. This fixture's volume mount is also
+    # what originally caught a real docker-py bug in the high-level
+    # containers.create(volumes=[...]) path, which fabricates garbage
+    # anonymous volumes for any compound bind mode like "rw,z" -- see
+    # DockerPyClient._create()'s docstring in docker/client.py.
+    container = load("selinux-relabel")
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    mounts: list[Mount] = spec.create_kwargs["mounts"]
+    assert [m["Target"] for m in mounts] == ["/plain"]
+    assert mounts[0]["ReadOnly"] is True
+
+    binds = spec.create_kwargs["volumes"]
+    by_dest = {b.split(":")[1]: b for b in binds}
+    assert by_dest["/shared"].endswith(":/shared:rw,z")
+    assert "bind-shared" in by_dest["/shared"]
+    assert by_dest["/private"].endswith(":/private:ro,Z")
+    assert "bind-private" in by_dest["/private"]
+    assert by_dest["/vol"] == "lookout-selinux-vol:/vol:rw,z"
+
+
 def test_selinux_shared_relabel_bind_mount_goes_through_legacy_binds() -> None:
     # Hand-built (no live daemon available here): a bind mount whose Mode is
     # just "z" (shared SELinux label), analogous to the real fixture's

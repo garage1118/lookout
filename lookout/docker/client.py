@@ -7,6 +7,36 @@ import docker as docker_sdk
 from lookout.docker.container import Container
 from lookout.docker.recreate import build_create_kwargs
 
+_HOST_CONFIG_KWARGS = frozenset(
+    {
+        "mounts",
+        "restart_policy",
+        "cap_add",
+        "cap_drop",
+        "privileged",
+        "ulimits",
+        "sysctls",
+        "devices",
+        "dns",
+        "extra_hosts",
+        "tmpfs",
+        "mem_limit",
+        "nano_cpus",
+        "cpu_shares",
+        "memswap_limit",
+        "pids_limit",
+        "log_config",
+        "security_opt",
+        "group_add",
+        "read_only",
+        "shm_size",
+        "init",
+        "pid_mode",
+        "ipc_mode",
+        "network_mode",
+    }
+)
+
 
 def _strip_tag(image_name: str) -> str:
     """"repo:tag" -> "repo". Only the last ':' after the last '/' is a tag
@@ -118,7 +148,7 @@ class DockerPyClient:
         temp_name = f"{container.name}-lookout-old"
         self.rename(container, temp_name)
         try:
-            new_container = self._client.containers.create(**spec.create_kwargs)
+            new_container = self._create(spec.create_kwargs)
         except Exception:
             self.rename(container, container.name)
             raise
@@ -140,6 +170,47 @@ class DockerPyClient:
         self._client.containers.get(container.id).remove()
 
         return Container.from_inspect(self._client.containers.get(new_container.id).attrs)
+
+    def _create(self, create_kwargs: dict[str, Any]) -> Any:
+        """containers.create(), except for the "volumes" (legacy Binds
+        string) case, which needs the low-level API instead.
+
+        docker-py's high-level containers.create(volumes=[...]) doesn't
+        just set HostConfig.Binds from the strings — it also independently
+        derives Config.Volumes from them via _host_volume_from_bind(),
+        which only understands a plain "ro"/"rw" mode suffix. Given a
+        compound mode like "rw,z" (an SELinux relabel), that helper falls
+        through to returning the raw "dest:mode" tail verbatim, and Docker
+        creates a garbage anonymous volume at that literal bogus path
+        alongside the correct bind. Caught live against a real
+        SELinux-enforcing daemon — HostConfig.Binds itself came out
+        correct, but three spurious extra volumes appeared alongside it.
+        The low-level HostConfig(binds=[...]) path passes a list of bind
+        strings straight through with no such parsing, so building the
+        HostConfig ourselves via the low-level API avoids the bug
+        entirely. Only taken when there's actually a relabeled mount to
+        carry over; every other recreate still goes through the plain
+        high-level call above.
+        """
+        if "volumes" not in create_kwargs:
+            return self._client.containers.create(**create_kwargs)
+
+        kwargs = dict(create_kwargs)
+        host_config_kwargs: dict[str, Any] = {"binds": kwargs.pop("volumes")}
+        for key in list(kwargs):
+            if key in _HOST_CONFIG_KWARGS:
+                host_config_kwargs[key] = kwargs.pop(key)
+
+        ports = kwargs.pop("ports", None)
+        if ports:
+            host_config_kwargs["port_bindings"] = ports
+            # Config.ExposedPorts needs (port, proto) tuples, same
+            # derivation the high-level API itself does internally.
+            kwargs["ports"] = [tuple(p.split("/", 1)) for p in sorted(ports)]
+
+        kwargs["host_config"] = self._client.api.create_host_config(**host_config_kwargs)
+        raw = self._client.api.create_container(**kwargs)
+        return self._client.containers.get(raw["Id"])
 
     def start(self, container: Container) -> None:
         self._client.containers.get(container.id).start()

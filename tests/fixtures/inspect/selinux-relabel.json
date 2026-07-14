@@ -1,0 +1,253 @@
+{
+    "Id": "7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e",
+    "Created": "2026-07-14T19:15:42.095163278Z",
+    "Path": "sleep",
+    "Args": [
+        "3600"
+    ],
+    "State": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 431449,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-07-14T19:15:42.163160113Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "Image": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+    "ResolvConfPath": "/var/lib/docker/containers/7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e/hostname",
+    "HostsPath": "/var/lib/docker/containers/7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e/hosts",
+    "LogPath": "/var/lib/docker/containers/7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e/7ece017d080f653275a069f1626d59abe25b51e4e4293e157e9200ee5f63768e-json.log",
+    "Name": "/lookout-selinux-test",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "system_u:object_r:container_file_t:s0:c478,c617",
+    "ProcessLabel": "system_u:system_r:container_t:s0:c478,c617",
+    "AppArmorProfile": "",
+    "ExecIDs": null,
+    "HostConfig": {
+        "Binds": [
+            "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-shared:/shared:rw,z",
+            "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-private:/private:ro,Z",
+            "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-plain:/plain:ro"
+        ],
+        "ContainerIDFile": "",
+        "LogConfig": {
+            "Type": "json-file",
+            "Config": {}
+        },
+        "NetworkMode": "bridge",
+        "PortBindings": {},
+        "RestartPolicy": {
+            "Name": "no",
+            "MaximumRetryCount": 0
+        },
+        "AutoRemove": false,
+        "VolumeDriver": "",
+        "VolumesFrom": null,
+        "ConsoleSize": [
+            0,
+            0
+        ],
+        "CapAdd": null,
+        "CapDrop": null,
+        "CgroupnsMode": "private",
+        "Dns": null,
+        "DnsOptions": [],
+        "DnsSearch": [],
+        "ExtraHosts": null,
+        "GroupAdd": null,
+        "IpcMode": "private",
+        "Cgroup": "",
+        "Links": null,
+        "OomScoreAdj": 0,
+        "PidMode": "",
+        "Privileged": false,
+        "PublishAllPorts": false,
+        "ReadonlyRootfs": false,
+        "SecurityOpt": null,
+        "UTSMode": "",
+        "UsernsMode": "",
+        "ShmSize": 67108864,
+        "Runtime": "runc",
+        "Isolation": "",
+        "CpuShares": 0,
+        "Memory": 0,
+        "NanoCpus": 0,
+        "CgroupParent": "",
+        "BlkioWeight": 0,
+        "BlkioWeightDevice": [],
+        "BlkioDeviceReadBps": [],
+        "BlkioDeviceWriteBps": [],
+        "BlkioDeviceReadIOps": [],
+        "BlkioDeviceWriteIOps": [],
+        "CpuPeriod": 0,
+        "CpuQuota": 0,
+        "CpuRealtimePeriod": 0,
+        "CpuRealtimeRuntime": 0,
+        "CpusetCpus": "",
+        "CpusetMems": "",
+        "Devices": [],
+        "DeviceCgroupRules": null,
+        "DeviceRequests": null,
+        "MemoryReservation": 0,
+        "MemorySwap": 0,
+        "MemorySwappiness": null,
+        "OomKillDisable": null,
+        "PidsLimit": null,
+        "Ulimits": [],
+        "CpuCount": 0,
+        "CpuPercent": 0,
+        "IOMaximumIOps": 0,
+        "IOMaximumBandwidth": 0,
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Source": "lookout-selinux-vol",
+                "Target": "/vol",
+                "VolumeOptions": {
+                    "DriverConfig": {
+                        "Options": {
+                            "selinux-relabel": "Z"
+                        }
+                    }
+                }
+            }
+        ],
+        "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/interrupts",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/sched_debug",
+            "/proc/scsi",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/sys/devices/virtual/powercap",
+            "/sys/firmware"
+        ],
+        "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+        ]
+    },
+    "Storage": {
+        "RootFS": {
+            "Snapshot": {
+                "Name": "overlayfs"
+            }
+        }
+    },
+    "Mounts": [
+        {
+            "Type": "bind",
+            "Source": "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-shared",
+            "Destination": "/shared",
+            "Mode": "rw,z",
+            "RW": true,
+            "Propagation": "rprivate"
+        },
+        {
+            "Type": "bind",
+            "Source": "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-private",
+            "Destination": "/private",
+            "Mode": "ro,Z",
+            "RW": false,
+            "Propagation": "rprivate"
+        },
+        {
+            "Type": "bind",
+            "Source": "/tmp/claude-1000/-home-eng-lookout/f47dbfd7-a035-4623-80d7-5814c1b9fd79/scratchpad/selinux-test/bind-plain",
+            "Destination": "/plain",
+            "Mode": "ro",
+            "RW": false,
+            "Propagation": "rprivate"
+        },
+        {
+            "Type": "volume",
+            "Name": "lookout-selinux-vol",
+            "Source": "/var/lib/docker/volumes/lookout-selinux-vol/_data",
+            "Destination": "/vol",
+            "Driver": "local",
+            "Mode": "z",
+            "RW": true,
+            "Propagation": ""
+        }
+    ],
+    "Config": {
+        "Hostname": "7ece017d080f",
+        "Domainname": "",
+        "User": "",
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Cmd": [
+            "sleep",
+            "3600"
+        ],
+        "Image": "alpine:latest",
+        "Volumes": null,
+        "WorkingDir": "/",
+        "Entrypoint": null,
+        "Labels": {}
+    },
+    "NetworkSettings": {
+        "SandboxID": "a2c4db35514524b6b0c87bcb710fcae2bf8095d9b2b0459347f88de43269168c",
+        "SandboxKey": "/var/run/docker/netns/a2c4db355145",
+        "Ports": {},
+        "Networks": {
+            "bridge": {
+                "IPAMConfig": null,
+                "Links": null,
+                "Aliases": null,
+                "DriverOpts": null,
+                "GwPriority": 0,
+                "NetworkID": "c010fb09682e59dbc3e4307685deff9848cd3b85d9803b7edb555487ff4ca364",
+                "EndpointID": "bb26c3ba4f62064a37fbb3ab41c431408fdc8d60dc5f0f5e5d36ad04a3dca5f9",
+                "Gateway": "172.17.0.1",
+                "IPAddress": "172.17.0.2",
+                "MacAddress": "1a:f8:60:57:92:05",
+                "IPPrefixLen": 16,
+                "IPv6Gateway": "",
+                "GlobalIPv6Address": "",
+                "GlobalIPv6PrefixLen": 0,
+                "DNSNames": null
+            }
+        }
+    },
+    "ImageManifestDescriptor": {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f",
+        "size": 1022,
+        "annotations": {
+            "com.docker.official-images.bashbrew.arch": "amd64",
+            "org.opencontainers.image.base.name": "scratch",
+            "org.opencontainers.image.created": "2026-06-16T00:01:04Z",
+            "org.opencontainers.image.revision": "398ff0c866d27e9f46f53e48184fe36c674b8897",
+            "org.opencontainers.image.source": "https://github.com/alpinelinux/docker-alpine.git#398ff0c866d27e9f46f53e48184fe36c674b8897:x86_64",
+            "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+            "org.opencontainers.image.version": "3.24.1"
+        },
+        "platform": {
+            "architecture": "amd64",
+            "os": "linux"
+        }
+    }
+}
