@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     notification_urls: list[str] = Field(
         default_factory=list, description="Apprise-format notification URLs"
     )
+    notify_only_on_change: bool = Field(
+        default=False,
+        description="Skip sending a notification when nothing was updated, failed, or found stale",
+    )
+    notify_on_startup: bool = Field(
+        default=False,
+        description="Send a one-time notification when lookout starts, separate from the "
+        "per-run summary",
+    )
 
     docker_host: str | None = Field(
         default=None, description="Defaults to the docker-py default (env/socket)"

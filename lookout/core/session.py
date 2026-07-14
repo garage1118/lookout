@@ -14,6 +14,15 @@ class Session:
     stale: list[Container] = field(default_factory=list)
     skipped: list[Container] = field(default_factory=list)
 
+    def has_activity(self) -> bool:
+        """Whether anything notable happened this run — used to skip sending
+        a notification for a routine "nothing to do" pass. `skipped` (pinned
+        images, or a registry check that failed — the latter is already
+        logged locally at error level) is deliberately excluded, since it's
+        the routine case for most real setups and would otherwise defeat the
+        point of the toggle."""
+        return bool(self.updated or self.failed or self.stale)
+
     def summary(self) -> str:
         updated_names = {c.name for c in self.updated}
         # containers found stale but left alone (monitor-only, or the stop/

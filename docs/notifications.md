@@ -37,11 +37,20 @@ webhooks require one and aren't available on personal Gmail accounts.
 ```
 
 If `LOOKOUT_NOTIFICATION_URLS` is empty (the default), no notification is attempted and nothing is
-sent — including on startup. lookout does not send a "started" notification the way Watchtower
-does.
+sent.
 
-A notification is sent after **every** run, regardless of whether anything changed. lookout does
-not currently have a "only notify when something happened" toggle.
+A notification is sent after **every** run, regardless of whether anything changed, unless
+`--notify-only-on-change` / `LOOKOUT_NOTIFY_ONLY_ON_CHANGE` is set — in that case a run with
+nothing updated, failed, or stale is skipped entirely (containers skipped because they're
+pinned-by-digest or their registry check failed don't count as "activity" by themselves, since a
+registry-check failure is already logged locally at error level).
+
+lookout can also send a one-time notification when it starts, separate from the per-run summary —
+set `--notify-on-startup` / `LOOKOUT_NOTIFY_ON_STARTUP` (default: off). It fires once per process
+start, in both `--run-once` and daemon mode (so `--run-once` with the flag set sends two messages:
+startup, then the run summary), and is independent of `--notify-only-on-change`, which only gates
+the per-run summary. The message is fixed and minimal — `lookout v0.1.0 started` — matching the
+run summary's non-templated report format below.
 
 ## Report format
 

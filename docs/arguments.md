@@ -152,6 +152,30 @@ Environment Variable: LOOKOUT_NOTIFICATION_URLS
              Default: [] (no notifications sent)
 ```
 
+## Notify only on change
+
+Skip sending a notification when nothing was updated, failed, or found stale — see
+[Notifications](notifications.md).
+
+```text
+            Argument: --notify-only-on-change
+Environment Variable: LOOKOUT_NOTIFY_ONLY_ON_CHANGE
+                Type: Boolean
+             Default: false
+```
+
+## Notify on startup
+
+Send a one-time notification when lookout starts, separate from the per-run summary — see
+[Notifications](notifications.md).
+
+```text
+            Argument: --notify-on-startup
+Environment Variable: LOOKOUT_NOTIFY_ON_STARTUP
+                Type: Boolean
+             Default: false
+```
+
 ## Registry host / username / password
 
 A single fallback credential pair for one private registry, tried only for images on

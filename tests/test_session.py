@@ -57,3 +57,24 @@ def test_summary_lists_skipped_containers() -> None:
     assert "1 skipped" in summary
     assert "Skipped:" in summary
     assert "pinned" in summary
+
+
+def test_has_activity_false_for_empty_session() -> None:
+    assert Session().has_activity() is False
+
+
+def test_has_activity_false_for_skipped_only() -> None:
+    assert Session(skipped=[make_container("pinned")]).has_activity() is False
+
+
+def test_has_activity_true_for_updated() -> None:
+    assert Session(updated=[make_container("web")]).has_activity() is True
+
+
+def test_has_activity_true_for_stale() -> None:
+    assert Session(stale=[make_container("web")]).has_activity() is True
+
+
+def test_has_activity_true_for_failed() -> None:
+    web = make_container("web")
+    assert Session(failed=[(web, RuntimeError("boom"))]).has_activity() is True

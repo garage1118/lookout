@@ -9,6 +9,7 @@ from lookout.config import Settings
 from lookout.core.updater import run as run_update
 from lookout.docker.client import DockerPyClient
 from lookout.notifications.notify import send as send_notifications
+from lookout.notifications.notify import send_startup
 from lookout.registry.digest import RegistryClient
 from lookout.scheduler import run_forever
 
@@ -48,6 +49,18 @@ from lookout.scheduler import run_forever
 )
 @click.option("--docker-host", default=None, help="Docker daemon URL (defaults to the SDK's own)")
 @click.option("--log-level", default=None, help="Python logging level, e.g. DEBUG, INFO, WARNING")
+@click.option(
+    "--notify-only-on-change",
+    is_flag=True,
+    default=None,
+    help="Skip sending a notification when nothing was updated, failed, or found stale",
+)
+@click.option(
+    "--notify-on-startup",
+    is_flag=True,
+    default=None,
+    help="Send a one-time notification when lookout starts",
+)
 def main(
     interval: int | None,
     run_once: bool,
@@ -59,6 +72,8 @@ def main(
     no_pull: bool | None,
     docker_host: str | None,
     log_level: str | None,
+    notify_only_on_change: bool | None,
+    notify_on_startup: bool | None,
 ) -> None:
     settings = Settings()
 
@@ -80,6 +95,10 @@ def main(
         settings.docker_host = docker_host
     if log_level is not None:
         settings.log_level = log_level
+    if notify_only_on_change is not None:
+        settings.notify_only_on_change = notify_only_on_change
+    if notify_on_startup is not None:
+        settings.notify_on_startup = notify_on_startup
 
     logging.Formatter.converter = time.gmtime  # timestamps in UTC regardless of container TZ
     logging.basicConfig(
@@ -88,12 +107,15 @@ def main(
         datefmt="%Y-%m-%dT%H:%M:%SZ",
     )
 
+    if settings.notify_on_startup:
+        send_startup(settings.notification_urls)
+
     docker_client = DockerPyClient(docker_host=settings.docker_host)
     registry_client = RegistryClient()
 
     def job() -> None:
         session = run_update(docker_client, registry_client, settings)
-        send_notifications(session, settings.notification_urls)
+        send_notifications(session, settings.notification_urls, settings.notify_only_on_change)
 
     if run_once:
         job()

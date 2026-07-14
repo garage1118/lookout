@@ -26,7 +26,9 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
         "run_update",
         lambda dc, rc, settings: captured_settings.append(settings) or "session",
     )
-    monkeypatch.setattr(cli_module, "send_notifications", lambda session, urls: None)
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -43,6 +45,8 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
             "--monitor-only",
             "--no-pull",
             "--label-enable",
+            "--notify-only-on-change",
+            "--notify-on-startup",
         ],
     )
 
@@ -55,6 +59,8 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
     assert settings.monitor_only is True
     assert settings.no_pull is True
     assert settings.label_enable is True
+    assert settings.notify_only_on_change is True
+    assert settings.notify_on_startup is True
 
 
 def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
@@ -67,7 +73,9 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
         "run_update",
         lambda dc, rc, settings: captured_settings.append(settings) or "session",
     )
-    monkeypatch.setattr(cli_module, "send_notifications", lambda session, urls: None)
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_module.main, ["--run-once"])
@@ -77,13 +85,17 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
     assert settings.cleanup is False
     assert settings.monitor_only is False
     assert settings.include_names == []
+    assert settings.notify_only_on_change is False
+    assert settings.notify_on_startup is False
 
 
 def test_interval_mode_invokes_scheduler_with_parsed_interval(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
-    monkeypatch.setattr(cli_module, "send_notifications", lambda session, urls: None)
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
 
     captured = {}
 
@@ -98,3 +110,39 @@ def test_interval_mode_invokes_scheduler_with_parsed_interval(monkeypatch: Any) 
 
     assert result.exit_code == 0, result.output
     assert captured["interval_seconds"] == 42
+
+
+def test_notify_on_startup_calls_send_startup_once(monkeypatch: Any) -> None:
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    startup_calls: list[list[str]] = []
+    monkeypatch.setattr(cli_module, "send_startup", lambda urls: startup_calls.append(urls))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_module.main, ["--run-once", "--notify-on-startup"])
+
+    assert result.exit_code == 0, result.output
+    assert len(startup_calls) == 1
+
+
+def test_notify_on_startup_not_called_when_flag_omitted(monkeypatch: Any) -> None:
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: "session")
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    startup_calls: list[list[str]] = []
+    monkeypatch.setattr(cli_module, "send_startup", lambda urls: startup_calls.append(urls))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_module.main, ["--run-once"])
+
+    assert result.exit_code == 0, result.output
+    assert startup_calls == []
