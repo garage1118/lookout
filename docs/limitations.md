@@ -30,6 +30,15 @@ replacement. The following are **not** carried over to the recreated container:
 - Ulimits, sysctls, device mappings, DNS settings, extra hosts, tmpfs mounts
 - `--net=container:<id>` and other non-bridge/custom `NetworkMode` values are passed through as
   `network_mode` but not validated against a live daemon
+- Resource limits (`Memory`, `NanoCpus`/`CpuShares`, `MemorySwap`, `PidsLimit`) — a recreated
+  container silently loses its limits
+- `LogConfig` (driver + options), `SecurityOpt`, `GroupAdd`, `ReadonlyRootfs`, `ShmSize`, `Init`,
+  `StopSignal`/`StopTimeout`, `PidMode`/`IpcMode`
+- Per-network static IPs (`IPAMConfig.IPv4Address`) and MAC addresses — aliases are kept, but a
+  container with a pinned IP comes back with a dynamic one
+
+Conversely, containers published with `-P` get their ephemeral host ports **pinned** on recreate
+(the previously assigned host port is reused verbatim instead of a fresh one being chosen).
 
 Also not implemented: `--remove-volumes` (removing anonymous volumes on update),
 `--include-stopped`/`--include-restarting`/`--revive-stopped` (lookout only ever considers

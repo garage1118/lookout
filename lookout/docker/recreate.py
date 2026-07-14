@@ -9,6 +9,17 @@ Known simplifications, not yet handled:
 - Ulimits, sysctls, devices, dns, extra_hosts, tmpfs are not carried over.
 - `--net=container:<id>` and other non-bridge/custom NetworkMode values are
   passed through as network_mode but never validated against a live daemon.
+- Resource limits (Memory, NanoCpus/CpuShares, MemorySwap, PidsLimit) are
+  dropped, silently removing a recreated container's limits.
+- LogConfig (driver + options), SecurityOpt, GroupAdd, ReadonlyRootfs,
+  ShmSize, Init, StopSignal/StopTimeout, and PidMode/IpcMode are not
+  carried over.
+- Per-network static IPs (IPAMConfig.IPv4Address) and MAC addresses are
+  dropped by _build_networks() — aliases are kept, but a container with a
+  pinned IP comes back with a dynamic one.
+- Ephemeral host ports published with `-P` are pinned to their previously
+  assigned host port by _build_ports(), rather than getting a fresh
+  ephemeral port on recreate.
 """
 
 from __future__ import annotations
