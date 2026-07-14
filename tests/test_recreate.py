@@ -429,6 +429,28 @@ def test_default_ipc_mode_private_is_not_carried_over() -> None:
     assert "ipc_mode" not in spec.create_kwargs
 
 
+def test_static_ip_mac_fixture_survives_recreate() -> None:
+    # Captured live against a real Docker daemon (RHEL 9): a container on a
+    # custom network with a static IPv4 (--ip), static IPv6 (--ip6), and
+    # custom MAC address (--mac-address). Confirmed live that after a real
+    # stop/recreate/start cycle via DockerClient.recreate(), the new
+    # container's IPv4Address, IPv6Address, MacAddress, and network alias
+    # all matched the original exactly -- this also confirmed docker-py's
+    # Network.connect() does accept and apply the forwarded mac_address
+    # kwarg (previously only verified by reading docker-py's source, not
+    # exercised against a real daemon).
+    container = load("static-ip-mac")
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    attachment = spec.networks[0]
+    assert attachment.name == "lookout-static-net"
+    assert attachment.aliases == ["static-alias"]
+    assert attachment.ipv4_address == "172.28.0.42"
+    assert attachment.ipv6_address == "fd00:dead:beef::42"
+    assert attachment.mac_address == "02:42:ac:11:00:2a"
+
+
 def test_static_ip_and_mac_address_are_carried_over() -> None:
     # Hand-built stand-in (no live daemon available here) for a network with
     # a pinned IPAMConfig and MacAddress in NetworkSettings.Networks.

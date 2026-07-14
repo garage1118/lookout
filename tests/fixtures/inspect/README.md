@@ -16,3 +16,7 @@ fixture here rather than hand-writing JSON.
   `:Z`-relabeled bind, a plain unlabeled bind, and a `:z`-relabeled named
   volume, all on one container. Confirmed live that the recreated container
   preserves correct SELinux read/write behavior for each.
+- `static-ip-mac.json` — captured live: a container on a custom network with
+  a static IPv4 (`--ip`), static IPv6 (`--ip6`), custom MAC address
+  (`--mac-address`), and a network alias. Confirmed live that all four
+  survive a real recreate.
