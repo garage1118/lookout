@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from lookout.config import Settings
 from lookout.core.updater import run, stop_order
+from lookout.core.lifecycle import POST_UPDATE_LABEL
 from lookout.docker.container import DEPENDS_ON_LABEL, MONITOR_ONLY_LABEL, Container
 
 
@@ -32,6 +33,7 @@ class FakeDockerClient:
         self._containers = list(containers)
         self.calls: list[str] = []
         self.stop_fail: set[str] = set()
+        self.exec_fail: set[str] = set()
         self.removed_images: list[str] = []
         self.found_image_id: str | None = None
         self.local_image_id = "sha256:local"
@@ -77,6 +79,8 @@ class FakeDockerClient:
         self.removed_images.append(image_id)
 
     def exec_run(self, container: Container, command: list[str]) -> tuple[int, bytes]:
+        if container.name in self.exec_fail:
+            raise RuntimeError(f"exec failed: {container.name}")
         self.calls.append(f"exec:{container.name}")
         return 0, b""
 
@@ -156,6 +160,26 @@ def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
         "get_image_id:myapp:latest",
         "start:web",
     ]
+
+
+def test_run_counts_update_as_successful_despite_post_update_hook_error() -> None:
+    # The container is already recreated and started by the time the
+    # post-update hook runs; a hook that errors out (distinct from one that
+    # runs and exits non-zero, which lifecycle._run_hook only warns about)
+    # shouldn't turn a successful update into a "failed" one.
+    container = make_container(
+        "web",
+        repo_digests=["myapp@sha256:old"],
+        labels={POST_UPDATE_LABEL: "curl -f localhost/health"},
+    )
+    docker_client = FakeDockerClient([container])
+    docker_client.exec_fail = {"web"}
+    registry_client = FakeRegistryClient({"myapp:latest": "sha256:new"})
+
+    session = run(docker_client, registry_client, settings())
+
+    assert [c.name for c in session.updated] == ["web"]
+    assert session.failed == []
 
 
 def test_run_falls_back_to_local_image_lookup_when_repo_digests_orphaned() -> None:

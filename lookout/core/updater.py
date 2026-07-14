@@ -103,7 +103,14 @@ def run(
                 continue
             new_container = docker_client.recreate(container, new_image_id)
             docker_client.start(new_container)
-            lifecycle.post_update(docker_client, new_container)
+            # By this point the container has already been recreated and
+            # started, so a post-update hook that errors out (as opposed to
+            # one that runs and exits non-zero, which _run_hook only warns
+            # about) shouldn't turn a successful update into a "failed" one.
+            try:
+                lifecycle.post_update(docker_client, new_container)
+            except Exception:
+                logger.exception("post-update hook errored on %s", new_container.name)
             session.updated.append(new_container)
         except Exception as exc:
             logger.exception("failed to update %s", container.name)
