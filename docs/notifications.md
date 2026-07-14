@@ -20,6 +20,22 @@ docker run -d \
 See [github.com/caronc/apprise#popular-notification-services](https://github.com/caronc/apprise#popular-notification-services)
 for the full list of supported services and their URL formats.
 
+### Telegram
+
+Telegram is a good choice if you don't have a Google Workspace account — Google Chat's incoming
+webhooks require one and aren't available on personal Gmail accounts.
+
+1. Message [`@BotFather`](https://t.me/BotFather) in Telegram, send `/newbot`, and follow the
+   prompts. You'll get a `bot_token` that looks like `123456789:AAAAbcdefg_hijklmnop`.
+2. Send any message to your new bot, then visit
+   `https://api.telegram.org/bot<bot_token>/getUpdates` in a browser — the JSON response contains
+   a `chat.id` field.
+3. Set the Apprise URL to `tgram://<bot_token>/<chat_id>`:
+
+```bash
+-e LOOKOUT_NOTIFICATION_URLS='["tgram://123456789:AAAAbcdefg_hijklmnop/12315544"]'
+```
+
 If `LOOKOUT_NOTIFICATION_URLS` is empty (the default), no notification is attempted and nothing is
 sent — including on startup. lookout does not send a "started" notification the way Watchtower
 does.
