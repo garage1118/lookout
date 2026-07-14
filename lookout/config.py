@@ -1,5 +1,7 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -12,8 +14,8 @@ class Settings(BaseSettings):
         default=None, description="Cron expression; overrides interval"
     )
 
-    include_names: list[str] = Field(default_factory=list)
-    exclude_names: list[str] = Field(default_factory=list)
+    include_names: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    exclude_names: Annotated[list[str], NoDecode] = Field(default_factory=list)
     label_enable: bool = Field(
         default=False, description="Only monitor containers with the enable label"
     )
@@ -28,7 +30,7 @@ class Settings(BaseSettings):
 
     stop_timeout_seconds: int = Field(default=10)
 
-    notification_urls: list[str] = Field(
+    notification_urls: Annotated[list[str], NoDecode] = Field(
         default_factory=list, description="Apprise-format notification URLs"
     )
     notify_only_on_change: bool = Field(
@@ -60,3 +62,13 @@ class Settings(BaseSettings):
     registry_password: str | None = Field(default=None)
 
     log_level: str = Field(default="INFO")
+
+    @field_validator("include_names", "exclude_names", "notification_urls", mode="before")
+    @classmethod
+    def _split_comma_separated(cls, value: object) -> object:
+        """Env vars for list fields are comma-separated (LOOKOUT_INCLUDE_NAMES=a,b), not JSON —
+        pydantic-settings' default JSON decoding for list fields is a much less natural fit for
+        an env var than a plain comma-separated string."""
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
