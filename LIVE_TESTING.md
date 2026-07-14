@@ -99,10 +99,30 @@ every real bug in this codebase.
       service-specific payload quirks (Slack/Discord/Telegram's own expected shape) since the
       receiver was generic JSON, not a real chat service — worth a real Telegram/Slack run from a
       network that isn't blocking it, if that matters before 1.0.
+- [x] Lifecycle hooks: pre-update / post-update, including post-update-error handling
+      (`core/lifecycle.py`, `core/updater.py`) — confirmed live 2026-07-14 against a real
+      `DockerPyClient` and the real `core.updater.run()` orchestration, in three parts:
+      - **Happy path**: a container with both hooks set to `touch` a marker file on a bind-mounted
+        host directory (SELinux-relabeled `container_file_t`, or the write is denied — same
+        finding as the earlier SELinux item). Confirmed `pre-update` runs on the *old* container
+        and `post-update` runs on the *new* one, by naming each marker after the container id that
+        created it.
+      - **Hook exits non-zero**: both hooks set to `exit 1` — confirmed a warning is logged for
+        each (`lifecycle hook ... failed on ... (exit 1)`), and the update still proceeds normally
+        (stop, recreate, start all happen; counted in `updated`, not `failed`) — `_run_hook` never
+        raises for this case at all, so `updater.py`'s outer catch is never even involved here.
+      - **Hook genuinely errors (not just a non-zero exit)**: removed a container out from under
+        `lifecycle.post_update()` to force a real `exec_run()` failure — confirmed the real
+        `DockerPyClient.exec_run()` raises `docker.errors.NotFound` in this case (a genuine
+        exception, distinct from the exit-non-zero path above), validating the exact scenario
+        `tests/test_updater.py`'s `FakeDockerClient.exec_fail` simulates. `updater.py`'s own
+        catch-and-continue around that exception was already covered by
+        `test_run_counts_update_as_successful_despite_post_update_hook_error`, which passes — this
+        live check closes the gap of whether the real client can actually raise there at all,
+        which the fake could only assume.
 
 ## Not yet confirmed live
 
-- [ ] Lifecycle hooks: pre-update / post-update (`core/lifecycle.py`) — also has no unit tests
 - [ ] Private-registry credential reading from `~/.docker/config.json` (`registry/auth.py`)
 - [ ] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — documented as
       best-effort/unverified
@@ -112,8 +132,6 @@ every real bug in this codebase.
 
 ## New since the 2026-07-14 code review pass — need first-time live verification
 
-- [ ] Post-update hook errors no longer mark a successful update as failed (`core/updater.py`) —
-      needs confirming alongside lifecycle hooks
 - [ ] Explicit tmpfs-mount skip in recreate (`docker/recreate.py` `_build_mounts`) — confirm a
       container with a tmpfs mount recreates cleanly without it
 - [ ] Ulimits/sysctls/devices/dns/extra_hosts/tmpfs carried over on recreate (`docker/recreate.py`)
