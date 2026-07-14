@@ -130,7 +130,11 @@ class DockerPyClient:
             self._client.networks.get("bridge").disconnect(new_container, force=True)
             for attachment in spec.networks:
                 self._client.networks.get(attachment.name).connect(
-                    new_container, aliases=attachment.aliases or None
+                    new_container,
+                    aliases=attachment.aliases or None,
+                    ipv4_address=attachment.ipv4_address,
+                    ipv6_address=attachment.ipv6_address,
+                    mac_address=attachment.mac_address,
                 )
 
         self._client.containers.get(container.id).remove()

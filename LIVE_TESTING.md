@@ -57,3 +57,9 @@ every real bug in this codebase.
       `stop_timeout`/`pid_mode`/`ipc_mode` carried over on recreate (`docker/recreate.py`) —
       confirm against a container started with `--log-opt`, `--security-opt`, `--read-only`,
       `--init`, `--stop-signal`, `--pid=host`, and `--ipc=shareable` set
+- [ ] Static per-network IPv4/IPv6 address and MAC address carried over on recreate
+      (`docker/recreate.py` `_build_networks`, `docker/client.py` `recreate`) — confirm against a
+      container started with `--ip`/`--ip6`/`--mac-address` on a custom network; also confirm
+      `docker-py`'s `Network.connect()` actually accepts the forwarded `mac_address` kwarg against
+      the installed `docker-py` version (verified against docker-py's `main` branch source only,
+      not exercised against a real daemon in this session)

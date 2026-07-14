@@ -241,6 +241,41 @@ def test_default_ipc_mode_private_is_not_carried_over() -> None:
     assert "ipc_mode" not in spec.create_kwargs
 
 
+def test_static_ip_and_mac_address_are_carried_over() -> None:
+    # Hand-built stand-in (no live daemon available here) for a network with
+    # a pinned IPAMConfig and MacAddress in NetworkSettings.Networks.
+    container = Container(
+        id="abc123",
+        name="static-ip-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"NetworkMode": "lookout-test-net"},
+            "NetworkSettings": {
+                "Networks": {
+                    "lookout-test-net": {
+                        "Aliases": ["fixture-alias"],
+                        "IPAMConfig": {
+                            "IPv4Address": "172.18.0.42",
+                            "IPv6Address": "fd00::42",
+                        },
+                        "MacAddress": "02:42:ac:12:00:2a",
+                    }
+                }
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    attachment = spec.networks[0]
+    assert attachment.ipv4_address == "172.18.0.42"
+    assert attachment.ipv6_address == "fd00::42"
+    assert attachment.mac_address == "02:42:ac:12:00:2a"
+
+
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
     spec = build_create_kwargs(container, "sha256:newimage")

@@ -10,9 +10,6 @@ Known simplifications, not yet handled:
   passed through as network_mode but never validated against a live daemon.
   (`--net=container:<id>` refs are resolved to `container:<name>` by
   DockerClient before reaching this module — see client.py.)
-- Per-network static IPs (IPAMConfig.IPv4Address) and MAC addresses are
-  dropped by _build_networks() — aliases are kept, but a container with a
-  pinned IP comes back with a dynamic one.
 - Ephemeral host ports published with `-P` are pinned to their previously
   assigned host port by _build_ports(), rather than getting a fresh
   ephemeral port on recreate.
@@ -34,6 +31,9 @@ _DEFAULT_NETWORK_MODES = {"default", "bridge", "host", "none"}
 class NetworkAttachment:
     name: str
     aliases: list[str] = field(default_factory=list)
+    ipv4_address: str | None = None
+    ipv6_address: str | None = None
+    mac_address: str | None = None
 
 
 @dataclass
@@ -229,7 +229,16 @@ def _build_networks(inspect: dict[str, Any], mode: str) -> list[NetworkAttachmen
     if mode in _DEFAULT_NETWORK_MODES or mode.startswith("container:"):
         return []
     networks = inspect.get("NetworkSettings", {}).get("Networks") or {}
-    return [
-        NetworkAttachment(name=name, aliases=list(cfg.get("Aliases") or []))
-        for name, cfg in networks.items()
-    ]
+    attachments = []
+    for name, cfg in networks.items():
+        ipam = cfg.get("IPAMConfig") or {}
+        attachments.append(
+            NetworkAttachment(
+                name=name,
+                aliases=list(cfg.get("Aliases") or []),
+                ipv4_address=ipam.get("IPv4Address") or None,
+                ipv6_address=ipam.get("IPv6Address") or None,
+                mac_address=cfg.get("MacAddress") or None,
+            )
+        )
+    return attachments
