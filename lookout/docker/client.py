@@ -78,14 +78,25 @@ class DockerPyClient:
         self._client.containers.get(container.id).rename(new_name)
 
     def recreate(self, container: Container, new_image_id: str) -> Container:
-        """Remove the (already-stopped) old container and create its replacement.
+        """Create the replacement for an already-stopped container without
+        losing it if creation fails: rename the old container aside first,
+        and only remove it once the new container has been created. If
+        create() raises (kwargs Docker rejects, a network that disappeared,
+        a daemon hiccup), the old container is renamed back so there's still
+        something to retry against on the next poll, instead of being gone
+        for good.
 
         Does not start the new container — the caller starts it explicitly so
         post-update lifecycle hooks can run against a known-running container.
         """
         spec = build_create_kwargs(container, new_image_id)
-        self._client.containers.get(container.id).remove()
-        new_container = self._client.containers.create(**spec.create_kwargs)
+        temp_name = f"{container.name}-lookout-old"
+        self.rename(container, temp_name)
+        try:
+            new_container = self._client.containers.create(**spec.create_kwargs)
+        except Exception:
+            self.rename(container, container.name)
+            raise
         assert new_container.id is not None
 
         if spec.networks:
@@ -96,6 +107,8 @@ class DockerPyClient:
                 self._client.networks.get(attachment.name).connect(
                     new_container, aliases=attachment.aliases or None
                 )
+
+        self._client.containers.get(container.id).remove()
 
         return Container.from_inspect(self._client.containers.get(new_container.id).attrs)
 
