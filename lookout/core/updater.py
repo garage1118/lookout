@@ -102,11 +102,13 @@ def run(
                 docker_client.start(container)
                 continue
             new_container = docker_client.recreate(container, new_image_id)
-            docker_client.start(new_container)
-            # By this point the container has already been recreated and
-            # started, so a post-update hook that errors out (as opposed to
-            # one that runs and exits non-zero, which _run_hook only warns
-            # about) shouldn't turn a successful update into a "failed" one.
+            # recreate() creates, network-attaches, and starts the
+            # replacement as one atomic-ish unit (rolling itself back on any
+            # failure in that sequence), so the container is already running
+            # by this point — no separate start() call needed. A post-update
+            # hook that errors out (as opposed to one that runs and exits
+            # non-zero, which _run_hook only warns about) shouldn't turn a
+            # successful update into a "failed" one.
             try:
                 lifecycle.post_update(docker_client, new_container)
             except Exception:

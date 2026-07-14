@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Protocol
 
 import docker as docker_sdk
 
 from lookout.docker.container import Container
 from lookout.docker.recreate import build_create_kwargs
+
+logger = logging.getLogger(__name__)
 
 _HOST_CONFIG_KWARGS = frozenset(
     {
@@ -133,39 +136,62 @@ class DockerPyClient:
         self._client.containers.get(container.id).rename(new_name)
 
     def recreate(self, container: Container, new_image_id: str) -> Container:
-        """Create the replacement for an already-stopped container without
-        losing it if creation fails: rename the old container aside first,
-        and only remove it once the new container has been created. If
-        create() raises (kwargs Docker rejects, a network that disappeared,
-        a daemon hiccup), the old container is renamed back so there's still
-        something to retry against on the next poll, instead of being gone
-        for good.
+        """Create *and start* the replacement for an already-stopped
+        container without losing it if anything in that sequence fails:
+        rename the old container aside first, and only remove it once the
+        new container has been fully created, network-attached, AND
+        started. If any of that raises, the new container (if one was
+        created) is torn down, the old container is renamed back, and the
+        exception propagates — so there's still something to retry against
+        on the next poll, instead of being gone for good.
 
-        Does not start the new container — the caller starts it explicitly so
-        post-update lifecycle hooks can run against a known-running container.
+        Starting is included here rather than left to the caller
+        specifically because Docker doesn't validate every HostConfig
+        setting at create() time — a `--net=container:X` container whose
+        target has since vanished, for example, creates successfully and
+        only fails at start(), once it actually tries to join that
+        namespace. Caught live: with start() left to the caller (as an
+        earlier version of this method did), that failure landed after the
+        old container had already been removed, permanently losing it —
+        not a retryable failure like a create()-time rejection, an
+        unrecoverable one.
         """
         spec = build_create_kwargs(container, new_image_id)
         temp_name = f"{container.name}-lookout-old"
         self.rename(container, temp_name)
+        new_container = None
         try:
             new_container = self._create(spec.create_kwargs)
+            assert new_container.id is not None
+
+            if spec.networks:
+                # Creation auto-attaches the default bridge network; swap it
+                # for the real target networks so aliases can be set
+                # per-network.
+                self._client.networks.get("bridge").disconnect(new_container, force=True)
+                for attachment in spec.networks:
+                    self._client.networks.get(attachment.name).connect(
+                        new_container,
+                        aliases=attachment.aliases or None,
+                        ipv4_address=attachment.ipv4_address,
+                        ipv6_address=attachment.ipv6_address,
+                        mac_address=attachment.mac_address,
+                    )
+
+            new_container.start()
         except Exception:
+            if new_container is not None:
+                try:
+                    new_container.remove(force=True)
+                except Exception:
+                    logger.exception(
+                        "failed to clean up half-created container %s while rolling back "
+                        "recreate() of %s",
+                        new_container.id,
+                        container.name,
+                    )
             self.rename(container, container.name)
             raise
-        assert new_container.id is not None
-
-        if spec.networks:
-            # Creation auto-attaches the default bridge network; swap it for
-            # the real target networks so aliases can be set per-network.
-            self._client.networks.get("bridge").disconnect(new_container, force=True)
-            for attachment in spec.networks:
-                self._client.networks.get(attachment.name).connect(
-                    new_container,
-                    aliases=attachment.aliases or None,
-                    ipv4_address=attachment.ipv4_address,
-                    ipv6_address=attachment.ipv6_address,
-                    mac_address=attachment.mac_address,
-                )
 
         self._client.containers.get(container.id).remove()
 

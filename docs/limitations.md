@@ -28,13 +28,21 @@ replacement.
 
 Non-bridge/custom `NetworkMode` values other than `container:<id>` (e.g. `host`, or an exotic
 driver-specific mode) are passed through as `network_mode` but not validated against a live
-daemon before the recreate `create()` call — deliberately left out of v1 since an invalid value
-already fails safely (the rename-first `recreate()` restores the old container's name and the
-failure surfaces as a normal per-container error) rather than losing anything; pre-validating
-would only make the error message clearer, not change the outcome. `--net=container:<id>`
-specifically *is* resolved to `container:<name>` at listing time so the reference survives the
-target container itself being recreated (which changes its id) — see
-`DockerClient._resolve_network_mode_container_ref()`.
+daemon before the recreate call — deliberately left out of v1 since an invalid value already fails
+safely (`recreate()` creates, network-attaches, *and starts* the replacement as one rollback-able
+unit, restoring the old container's name if any of that fails) rather than losing anything;
+pre-validating would only make the error message clearer, not change the outcome. Starting is
+included in that rollback specifically because Docker doesn't validate a `--net=container:X`
+target's existence until start()-time, not create()-time — a real, live-caught gap in an earlier
+version of `recreate()`, which left starting to the caller and could permanently lose the old
+container if the target vanished between create() and start(). `--net=container:<id>` references
+are also resolved to `container:<name>` at listing time so they survive the target container
+itself being recreated (which changes its id) — see
+`DockerClient._resolve_network_mode_container_ref()`. Separately, a container sharing another
+container's network namespace inherits that container's hostname; `recreate()` knows not to set an
+explicit `hostname` in that case, since Docker rejects the combination outright (also a real,
+live-caught bug — it affected every `--net=container:X` container unconditionally, not just an edge
+case).
 
 SELinux bind-mount relabeling (`:z`/`:Z`) is carried over, but not through the same mechanism as
 other mounts: the modern Mount type used for everything else has no field for it at all (that flag

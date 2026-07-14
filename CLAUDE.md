@@ -41,7 +41,8 @@ docker_client.list_containers()
   -> for each: registry.get_latest_digest() vs core/updater._is_stale()
   -> core/updater.stop_order()    # dependents before dependencies
   -> lifecycle.pre_update() + docker_client.stop()      in stop_order
-  -> pull/get_image_id -> docker_client.recreate() -> start() -> lifecycle.post_update()
+  -> pull/get_image_id -> docker_client.recreate() -> lifecycle.post_update()
+       (recreate() creates, network-attaches, and starts the replacement itself)
                                                          in reversed(stop_order)
   -> optional cleanup of superseded images (best-effort; relies on Docker's own
      "image in use" rejection rather than reference-counting ourselves)
@@ -71,9 +72,18 @@ Each module's job:
   *after* creation — Docker rejects attaching extra networks to a container created in `"none"`
   mode, so `client.py`'s `recreate()` lets the default bridge auto-attach at create time, then
   disconnects it and connects the real target networks (this was a real bug caught during live
-  testing, not a hypothetical). Known gaps, documented in the module docstring: SELinux mount
-  relabeling, ulimits/sysctls/devices/dns/extra_hosts/tmpfs, and `--net=container:X` are not
-  carried over.
+  testing, not a hypothetical). SELinux mount relabeling (`:z`/`:Z`) is carried over via a legacy
+  `Binds`-style string alongside the modern `mounts` list, since the modern Mount type has no field
+  for it at all — building that string via `docker-py`'s high-level `containers.create(volumes=...)`
+  hit a real `docker-py` bug (`_host_volume_from_bind` mangles any compound mode like `rw,z` into a
+  garbage anonymous-volume declaration), worked around by building the `HostConfig` via the
+  low-level API instead in `DockerPyClient._create()`. A container using `--net=container:X` whose
+  hostname is inherited from the target (not its own id) must not have an explicit `hostname` set —
+  Docker rejects that combination outright, and this bug affected every such container
+  unconditionally until caught live. `recreate()` also starts the replacement itself (not left to
+  the caller) because Docker doesn't validate a `--net=container:X` target's existence until
+  start()-time, not create()-time — the currently non-bridge/custom `NetworkMode` value itself is
+  still not validated live before create() beyond that.
 - **`registry/digest.py`** — `parse_image()` mirrors Docker's own registry/namespace defaulting
   rules (no prefix → Docker Hub, single-segment repo → `library/`). `RegistryClient` does the
   root-probe → Bearer-challenge → token-exchange → manifest-HEAD flow, which covers Docker Hub and

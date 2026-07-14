@@ -45,6 +45,33 @@ every real bug in this codebase.
       `docker-py`'s `Network.connect()` does correctly accept and apply the forwarded `mac_address`
       kwarg (previously only verified by reading its source, not exercised against a real daemon).
       Real fixture captured: `tests/fixtures/inspect/static-ip-mac.json`.
+- [x] Rename-first `recreate()` survives a real failure (`docker/client.py`) — confirmed live
+      2026-07-14, in two parts:
+      - **create()-time rejection**: caught a real, separate, previously-undiscovered bug in the
+        process — `build_create_kwargs()` treated a `--net=container:X` container's *inherited*
+        hostname (Docker reports `Config.Hostname` as the network-sharing target's id/name, which
+        never matches this container's own id) as a custom hostname worth setting explicitly.
+        Docker rejects an explicit `hostname` outright whenever `network_mode` is `container:X`, so
+        this made *every* such container fail to recreate, unconditionally — not an edge case.
+        While this bug was still in place, the rename-first recovery worked exactly as documented:
+        `create()` failed, the old container was renamed back to its original name, no orphaned
+        container was left behind. Fixed in `build_create_kwargs()` (skip `hostname` when
+        `network_mode` starts with `container:`) and confirmed live that recreate then succeeds.
+      - **start()-time rejection — a more serious gap found in the same session**: for
+        `--net=container:X` specifically, Docker's `create()` succeeds even when `X` no longer
+        exists at all; the namespace-join is only validated at `start()`. The original
+        `recreate()` left starting to the caller, so by the time `start()` failed, the *old*
+        container had already been removed (create() had "succeeded") — a permanent, unrecoverable
+        loss, not a retryable failure like every other case this safety net covers. Confirmed live
+        by removing a `--net=container:X` target container entirely, then recreating the dependent
+        container: `create()` succeeded, and only `docker start` surfaced
+        `"joining network namespace of container: No such container"`. Fixed by moving `start()`
+        (and the network-reconnect step) inside `recreate()`'s own try/except, so a start()
+        failure now rolls back exactly like a create()-time one (removes the half-created
+        container, renames the old one back). Confirmed live after the fix: same vanished-target
+        scenario now correctly restores the old container with zero orphaned state.
+        `core/updater.py` no longer calls `start()` separately after `recreate()` — the contract
+        changed to "recreate() returns an already-running container."
 
 ## Not yet confirmed live
 
@@ -60,9 +87,6 @@ every real bug in this codebase.
 
 ## New since the 2026-07-14 code review pass — need first-time live verification
 
-- [ ] Rename-first `recreate()` (`docker/client.py`) — replaces the old remove-then-create flow;
-      needs a real create-failure case exercised (a rejected `HostConfig` field, a vanished
-      network) to prove the old container survives instead of being lost
 - [ ] No-pull restart-loop guard (`core/updater.py`) — needs confirming alongside `--no-pull`
       itself
 - [ ] Post-update hook errors no longer mark a successful update as failed (`core/updater.py`) —

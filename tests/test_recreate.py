@@ -49,6 +49,30 @@ def test_comprehensive_container_hostname_explicit() -> None:
     assert spec.create_kwargs["hostname"] == "fixture-host"
 
 
+def test_hostname_not_set_when_sharing_another_containers_network() -> None:
+    # Regression test, caught live: a container using --net=container:X
+    # reports Config.Hostname as the *target*'s id (inherited), which never
+    # matches this container's own id. That previously looked like a custom
+    # hostname worth carrying over, but Docker rejects an explicit hostname
+    # outright whenever network_mode is "container:X" -- this made every
+    # such container fail to recreate at all, unconditionally.
+    container = Container(
+        id="abc123def456",
+        name="shares-network-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {"Hostname": "some-other-container-id"},
+            "HostConfig": {"NetworkMode": "container:some-other-container-id"},
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "hostname" not in spec.create_kwargs
+
+
 def test_comprehensive_container_bind_and_named_volume_mounts() -> None:
     container = load("comprehensive")
 

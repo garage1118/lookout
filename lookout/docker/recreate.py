@@ -81,7 +81,17 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         kwargs["stop_timeout"] = config["StopTimeout"]
 
     hostname = config.get("Hostname")
-    if hostname and not container.id.startswith(hostname):
+    network_mode = host_config.get("NetworkMode") or ""
+    # A container sharing another container's network namespace always
+    # inherits that container's hostname -- Docker rejects an explicit
+    # hostname outright when network_mode is "container:X". In that mode,
+    # Config.Hostname reports the *other* container's id/name, which never
+    # matches this container's own id, so the plain not-the-default-id-prefix
+    # check below would otherwise wrongly treat it as a custom hostname worth
+    # setting explicitly (caught live: this made every container using
+    # --net=container:X fail to recreate at all, unconditionally).
+    shares_network_namespace = network_mode.startswith("container:")
+    if hostname and not shares_network_namespace and not container.id.startswith(hostname):
         kwargs["hostname"] = hostname
 
     mounts, binds = _build_mounts(inspect.get("Mounts") or [])

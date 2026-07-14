@@ -122,7 +122,6 @@ def test_run_updates_a_stale_container() -> None:
         "stop:web",
         "pull:myapp:latest",
         "recreate:web:sha256:pulled",
-        "start:web",
     ]
 
 
@@ -206,7 +205,6 @@ def test_run_falls_back_to_local_image_lookup_when_repo_digests_orphaned() -> No
         "stop:web",
         "pull:myapp:latest",
         "recreate:web:sha256:pulled",
-        "start:web",
     ]
 
 
