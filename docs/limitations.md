@@ -24,13 +24,23 @@ or acts on it — setting it has no effect.
 ## Container recreation
 
 `docker/recreate.py` translates a running container's config into create-kwargs for its
-replacement. The following are **not** carried over to the recreated container:
+replacement.
 
-- SELinux bind-mount relabeling (`:z`/`:Z` mount options)
-- Other non-bridge/custom `NetworkMode` values (e.g. `host`) are passed through as `network_mode`
-  but not validated against a live daemon. `--net=container:<id>` specifically is resolved to
-  `container:<name>` at listing time so the reference survives the target container itself being
-  recreated (which changes its id) — see `DockerClient._resolve_network_mode_container_ref()`
+Non-bridge/custom `NetworkMode` values other than `container:<id>` (e.g. `host`, or an exotic
+driver-specific mode) are passed through as `network_mode` but not validated against a live
+daemon before the recreate `create()` call — deliberately left out of v1 since an invalid value
+already fails safely (the rename-first `recreate()` restores the old container's name and the
+failure surfaces as a normal per-container error) rather than losing anything; pre-validating
+would only make the error message clearer, not change the outcome. `--net=container:<id>`
+specifically *is* resolved to `container:<name>` at listing time so the reference survives the
+target container itself being recreated (which changes its id) — see
+`DockerClient._resolve_network_mode_container_ref()`.
+
+SELinux bind-mount relabeling (`:z`/`:Z`) is carried over, but not through the same mechanism as
+other mounts: the modern Mount type used for everything else has no field for it at all (that flag
+is a legacy `-v`/`Binds`-only concept), so a mount using it is instead carried over as a legacy
+`Binds`-style string, coexisting in the same `create()` call alongside the modern `mounts` list for
+everything else. See `_build_mounts()` in `docker/recreate.py`.
 
 Separately, containers published with `-P` get their ephemeral host ports **pinned** on recreate:
 the previously assigned host port is reused verbatim instead of a fresh one being chosen. This

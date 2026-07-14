@@ -5,7 +5,6 @@ real `docker inspect` fixture in tests/fixtures/inspect/ (see
 tests/test_recreate.py) rather than assumed from the API docs alone.
 
 Known simplifications, not yet handled:
-- SELinux mount relabeling ('z'/'Z' bind mode) is dropped.
 - Non-bridge/custom NetworkMode values (host, container:<name>, ...) are
   passed through as network_mode but never validated against a live daemon.
   (`--net=container:<id>` refs are resolved to `container:<name>` by
@@ -85,9 +84,11 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
     if hostname and not container.id.startswith(hostname):
         kwargs["hostname"] = hostname
 
-    mounts = _build_mounts(inspect.get("Mounts") or [])
+    mounts, binds = _build_mounts(inspect.get("Mounts") or [])
     if mounts:
         kwargs["mounts"] = mounts
+    if binds:
+        kwargs["volumes"] = binds
 
     restart_policy = host_config.get("RestartPolicy") or {}
     if restart_policy.get("Name") and restart_policy["Name"] != "no":
@@ -178,8 +179,24 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
 _SUPPORTED_MOUNT_TYPES = {"bind", "volume"}
 
 
-def _build_mounts(raw_mounts: list[dict[str, Any]]) -> list[Mount]:
-    mounts = []
+_RELABEL_TOKENS = {"z", "Z"}
+
+
+def _build_mounts(raw_mounts: list[dict[str, Any]]) -> tuple[list[Mount], list[str]]:
+    """Returns (mounts, binds).
+
+    Mounts using the SELinux relabel flag (`:z`/`:Z`) can't go through the
+    modern Mount type used for everything else here — the Docker Engine API's
+    Mount spec (BindOptions/VolumeOptions) has no field for it at all, since
+    that flag is a legacy `-v`/`Binds`-only concept. Docker does accept the
+    legacy `Binds` and modern `Mounts` HostConfig fields in the same
+    create() call though (they populate independent HostConfig keys, the
+    same way a real `docker run` mixing `-v` and `--mount` would), so
+    relabeled mounts are carried over as `Binds`-style strings in a separate
+    list rather than being dropped.
+    """
+    mounts: list[Mount] = []
+    binds: list[str] = []
     for m in raw_mounts:
         mount_type = m.get("Type", "volume")
         if mount_type not in _SUPPORTED_MOUNT_TYPES:
@@ -189,6 +206,17 @@ def _build_mounts(raw_mounts: list[dict[str, Any]]) -> list[Mount]:
             # own tmpfs handling.
             continue
         source = m.get("Name") if mount_type == "volume" else m.get("Source")
+        mode_tokens = (m.get("Mode") or "").split(",")
+        relabel_tokens = [t for t in mode_tokens if t in _RELABEL_TOKENS]
+        if relabel_tokens:
+            # Re-derive rw/ro from RW rather than trusting a rw/ro token in
+            # Mode (a Mode of just "z" with no explicit rw/ro token defaults
+            # to rw at the Binds-string level, but RW is the authoritative
+            # field either way and every fixture seen so far agrees with it).
+            rw_token = "rw" if m.get("RW", True) else "ro"
+            full_mode = ",".join([rw_token, *relabel_tokens])
+            binds.append(f"{source}:{m['Destination']}:{full_mode}")
+            continue
         mounts.append(
             Mount(
                 target=m["Destination"],
@@ -197,7 +225,7 @@ def _build_mounts(raw_mounts: list[dict[str, Any]]) -> list[Mount]:
                 read_only=not m.get("RW", True),
             )
         )
-    return mounts
+    return mounts, binds
 
 
 def _build_healthcheck(raw: dict[str, Any] | None) -> Healthcheck | None:

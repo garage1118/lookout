@@ -63,3 +63,12 @@ every real bug in this codebase.
       `docker-py`'s `Network.connect()` actually accepts the forwarded `mac_address` kwarg against
       the installed `docker-py` version (verified against docker-py's `main` branch source only,
       not exercised against a real daemon in this session)
+- [ ] SELinux bind-mount/volume relabeling (`:z`/`:Z`) carried over via a legacy `Binds`-style
+      string alongside the modern `mounts` list (`docker/recreate.py` `_build_mounts`) — this is
+      the highest-priority item in this section to verify live: it's the riskiest of the recent
+      recreate.py changes (mixes two different Docker mount-declaration mechanisms in one
+      `create()` call, unlike the other additions here which are each a single straightforward
+      kwarg). Confirm against a real SELinux host (not available in this dev environment) with
+      both a `:z`-labeled bind mount and a `:z`-labeled named volume, both read-write and
+      read-only variants, and confirm the container this ships alongside doesn't also lose its
+      *other*, non-relabeled mounts in the same recreate

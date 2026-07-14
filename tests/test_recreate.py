@@ -62,10 +62,134 @@ def test_comprehensive_container_bind_and_named_volume_mounts() -> None:
     assert bind["Source"].endswith("bind-src")
     assert bind["ReadOnly"] is True
 
-    volume = by_target["/vol-dst"]
-    assert volume["Type"] == "volume"
-    assert volume["Source"] == "lookout-test-vol"
-    assert volume["ReadOnly"] is False
+    # The captured fixture's volume mount has Mode "z" (an SELinux relabel
+    # flag) — real evidence, not a guess, that Docker can report this even
+    # for a mount made via the modern Mounts API rather than only legacy
+    # `-v`. It's carried over as a legacy `Binds`-style string instead of a
+    # Mount object (see _build_mounts()'s docstring for why), so it shows up
+    # in `volumes`, not `mounts`.
+    assert "/vol-dst" not in by_target
+    assert spec.create_kwargs["volumes"] == ["lookout-test-vol:/vol-dst:rw,z"]
+
+
+def _container_with_mounts(mounts: list[dict[str, object]]) -> Container:
+    return Container(
+        id="abc123",
+        name="selinux-relabel-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={"Config": {}, "HostConfig": {}, "Mounts": mounts},
+    )
+
+
+def test_selinux_shared_relabel_bind_mount_goes_through_legacy_binds() -> None:
+    # Hand-built (no live daemon available here): a bind mount whose Mode is
+    # just "z" (shared SELinux label), analogous to the real fixture's
+    # volume mount but for a bind, and read-write.
+    container = _container_with_mounts(
+        [{"Type": "bind", "Source": "/host/shared", "Destination": "/data", "Mode": "z", "RW": True}]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "mounts" not in spec.create_kwargs
+    assert spec.create_kwargs["volumes"] == ["/host/shared:/data:rw,z"]
+
+
+def test_selinux_private_relabel_readonly_bind_mount_goes_through_legacy_binds() -> None:
+    # "Z" (private label) combined with a read-only mount — confirms the
+    # rw/ro token is re-derived from RW rather than trusted from Mode, since
+    # here Mode only has "ro" alongside "Z", not "rw".
+    container = _container_with_mounts(
+        [{"Type": "bind", "Source": "/host/priv", "Destination": "/priv", "Mode": "ro,Z", "RW": False}]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "mounts" not in spec.create_kwargs
+    assert spec.create_kwargs["volumes"] == ["/host/priv:/priv:ro,Z"]
+
+
+def test_selinux_relabel_volume_mount_goes_through_legacy_binds() -> None:
+    # Named volume (not a bind) with just "Z" and no explicit rw/ro token in
+    # Mode, read-only — confirms the source resolves to the volume Name
+    # (not Source) on this path too, matching _build_mounts()'s non-relabel
+    # branch.
+    container = _container_with_mounts(
+        [
+            {
+                "Type": "volume",
+                "Name": "priv-vol",
+                "Source": "/var/lib/docker/volumes/priv-vol/_data",
+                "Destination": "/vol",
+                "Mode": "Z",
+                "RW": False,
+            }
+        ]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "mounts" not in spec.create_kwargs
+    assert spec.create_kwargs["volumes"] == ["priv-vol:/vol:ro,Z"]
+
+
+def test_mount_without_relabel_flag_is_unaffected_by_the_split() -> None:
+    # A plain "ro" Mode (no z/Z) must still go through the ordinary Mount
+    # path, not be swept into binds by mistake.
+    container = _container_with_mounts(
+        [{"Type": "bind", "Source": "/host/plain", "Destination": "/plain", "Mode": "ro", "RW": False}]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "volumes" not in spec.create_kwargs
+    mounts: list[Mount] = spec.create_kwargs["mounts"]
+    assert mounts[0]["Target"] == "/plain"
+    assert mounts[0]["ReadOnly"] is True
+
+
+def test_mount_with_missing_mode_field_is_unaffected_by_the_split() -> None:
+    # Defensive case: a mount entry with no "Mode" key at all (not every
+    # Docker version/mount necessarily includes it) must not crash and must
+    # not be misrouted to binds.
+    container = _container_with_mounts(
+        [{"Type": "bind", "Source": "/host/nomode", "Destination": "/nomode", "RW": True}]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "volumes" not in spec.create_kwargs
+    assert spec.create_kwargs["mounts"][0]["Target"] == "/nomode"
+
+
+def test_mixed_relabeled_and_plain_mounts_split_correctly() -> None:
+    # Integration-style check: a plain bind, a relabeled bind, and a
+    # relabeled volume together must land in the right kwarg, without one
+    # group clobbering the other.
+    container = _container_with_mounts(
+        [
+            {"Type": "bind", "Source": "/host/plain", "Destination": "/plain", "Mode": "ro", "RW": False},
+            {"Type": "bind", "Source": "/host/shared", "Destination": "/shared", "Mode": "z", "RW": True},
+            {
+                "Type": "volume",
+                "Name": "priv-vol",
+                "Destination": "/vol",
+                "Mode": "Z",
+                "RW": True,
+            },
+        ]
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    mounts: list[Mount] = spec.create_kwargs["mounts"]
+    assert [m["Target"] for m in mounts] == ["/plain"]
+    assert spec.create_kwargs["volumes"] == [
+        "/host/shared:/shared:rw,z",
+        "priv-vol:/vol:rw,Z",
+    ]
 
 
 def test_tmpfs_mount_is_not_carried_over() -> None:
