@@ -72,6 +72,19 @@ every real bug in this codebase.
         scenario now correctly restores the old container with zero orphaned state.
         `core/updater.py` no longer calls `start()` separately after `recreate()` — the contract
         changed to "recreate() returns an already-running container."
+- [x] `--no-pull` and its restart-loop guard (`core/updater.py`) — confirmed live 2026-07-14 against
+      a real `DockerPyClient` and the real `core.updater.run()` orchestration (registry lookup
+      itself was stubbed to a fixed bogus digest, since registry lookup correctness was already
+      confirmed live separately and this test is specifically about the no-pull guard, which only
+      depends on `docker_client` state, not on which digest a real registry happens to report right
+      now). Two scenarios: (1) container stale per the (stubbed) registry digest, `--no-pull` set,
+      no external change to the local image — correctly restarted in place: same container id, same
+      image, still running, counted in `stale` but *not* `updated`. (2) same setup, but the local
+      image was retagged out from under the container by something other than lookout (simulated
+      via `docker tag`, standing in for an external `docker pull`/build) — correctly detected the
+      mismatch and recreated: new container id, running the newly-tagged image, counted in
+      `updated`. No bugs found — the guard added in the original code review pass behaves exactly as
+      documented in both directions.
 
 ## Not yet confirmed live
 
@@ -82,13 +95,10 @@ every real bug in this codebase.
       best-effort/unverified
 - [ ] Dependency-ordered stop/start (`stop_order`, container links / `depends-on` label)
 - [ ] `--monitor-only`
-- [ ] `--no-pull`
 - [ ] `--include` / `--exclude` name filtering
 
 ## New since the 2026-07-14 code review pass — need first-time live verification
 
-- [ ] No-pull restart-loop guard (`core/updater.py`) — needs confirming alongside `--no-pull`
-      itself
 - [ ] Post-update hook errors no longer mark a successful update as failed (`core/updater.py`) —
       needs confirming alongside lifecycle hooks
 - [ ] Explicit tmpfs-mount skip in recreate (`docker/recreate.py` `_build_mounts`) — confirm a
