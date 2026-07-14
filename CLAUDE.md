@@ -11,8 +11,8 @@ their runtime config (mounts, networks, restart policy, healthcheck, etc.).
 
 The full architecture, module layout, data flow, and rationale (including *why* this is a Python
 rewrite rather than a Go fix) live in `watchtower-py-handoff.md` — read it before making structural
-changes. `watchtower/` is a gitignored clone of the original Go project kept for reference only; it
-is not part of this codebase.
+changes. The original Go project can be cloned to `watchtower/` (gitignored) for reference if
+needed; it is not part of this codebase.
 
 v1 non-goals: Docker Swarm service updates, an HTTP API/webhook trigger, multi-host/fleet
 management (single Docker daemon per instance).
