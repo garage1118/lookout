@@ -49,3 +49,13 @@ def test_non_positive_interval_seconds_rejected_on_cli_override() -> None:
 def test_negative_stop_timeout_seconds_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, stop_timeout_seconds=-1)
+
+
+def test_invalid_log_level_rejected_with_friendly_message() -> None:
+    with pytest.raises(ValidationError, match="invalid log level"):
+        Settings(_env_file=None, log_level="not-a-level")
+
+
+def test_log_level_is_normalized_to_uppercase() -> None:
+    settings = Settings(_env_file=None, log_level="debug")
+    assert settings.log_level == "DEBUG"

@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from pydantic import Field, field_validator
@@ -64,6 +65,17 @@ class Settings(BaseSettings):
     registry_password: str | None = Field(default=None)
 
     log_level: str = Field(default="INFO")
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        valid = logging.getLevelNamesMapping().keys()
+        if normalized not in valid:
+            raise ValueError(
+                f"invalid log level {value!r}; must be one of {', '.join(sorted(valid))}"
+            )
+        return normalized
 
     @field_validator("include_names", "exclude_names", "notification_urls", mode="before")
     @classmethod
