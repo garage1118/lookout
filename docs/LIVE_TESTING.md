@@ -319,3 +319,9 @@ every real bug in this codebase.
       the injected failure was logged separately; and the old container was still successfully
       `start()`-ed (confirmed running via a real inspect) despite still being named
       `rollbacktest-lookout-old` since the rename-back itself never completed. No bugs found.
+- [x] Shared `httpx.Client` reused across `RegistryClient.get_latest_digest()` calls
+      (`registry/digest.py`) — confirmed live 2026-07-15: three real digest lookups against Docker
+      Hub (`alpine:3.19`, `alpine:3.20`, `library/busybox:latest`) on one `RegistryClient` instance
+      all succeeded and returned real `sha256:...` digests, completing in well under a second
+      total. No bugs found — connection reuse across images/registries doesn't affect correctness,
+      only round-trip cost.

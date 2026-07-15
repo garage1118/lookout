@@ -103,9 +103,16 @@ def parse_image(image: str) -> ImageRef:
 
 
 class RegistryClient:
+    """One `httpx.Client` is opened here and reused for the lifetime of this
+    `RegistryClient` instance (constructed once in cli.py and reused across
+    every poll in daemon mode) rather than a fresh one per
+    get_latest_digest() call — httpx.Client's connection pool means N images
+    on the same registry host now share connections/TLS sessions instead of
+    each paying a fresh handshake, the same reuse the per-run AuthCache
+    already gets for the auth challenge itself."""
+
     def __init__(self, timeout: float = 10.0, transport: httpx.BaseTransport | None = None) -> None:
-        self._timeout = timeout
-        self._transport = transport  # None means the real network; set in tests only
+        self._client = httpx.Client(timeout=timeout, transport=transport)
 
     def get_latest_digest(
         self, image: str, auth: RegistryAuth | None, cache: AuthCache | None = None
@@ -114,24 +121,24 @@ class RegistryClient:
             raise ValueError(f"{image} is pinned to a digest; nothing to check")
 
         ref = parse_image(image)
-        with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
-            headers = {"Accept": _MANIFEST_ACCEPT}
-            token = self._authenticate(client, ref, auth, cache)
-            if token:
-                headers["Authorization"] = f"Bearer {token}"
-            elif auth and auth.username:
-                headers["Authorization"] = _basic_auth_header(auth)
+        client = self._client
+        headers = {"Accept": _MANIFEST_ACCEPT}
+        token = self._authenticate(client, ref, auth, cache)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        elif auth and auth.username:
+            headers["Authorization"] = _basic_auth_header(auth)
 
-            url = f"https://{ref.registry}/v2/{ref.repository}/manifests/{ref.reference}"
-            response = client.head(url, headers=headers)
-            if response.status_code == 405 or "docker-content-digest" not in response.headers:
-                response = client.get(url, headers=headers)
-            response.raise_for_status()
+        url = f"https://{ref.registry}/v2/{ref.repository}/manifests/{ref.reference}"
+        response = client.head(url, headers=headers)
+        if response.status_code == 405 or "docker-content-digest" not in response.headers:
+            response = client.get(url, headers=headers)
+        response.raise_for_status()
 
-            digest = response.headers.get("docker-content-digest")
-            if not digest:
-                raise RuntimeError(f"registry did not return a content digest for {image}")
-            return str(digest)
+        digest = response.headers.get("docker-content-digest")
+        if not digest:
+            raise RuntimeError(f"registry did not return a content digest for {image}")
+        return str(digest)
 
     def _authenticate(
         self,
