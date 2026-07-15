@@ -1,5 +1,9 @@
 # lookout
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/garage1118/lookout)](https://hub.docker.com/r/garage1118/lookout)
+[![Docker Image Size](https://img.shields.io/docker/image-size/garage1118/lookout/latest)](https://hub.docker.com/r/garage1118/lookout)
+[![Docker Image Version](https://img.shields.io/docker/v/garage1118/lookout?sort=semver)](https://hub.docker.com/r/garage1118/lookout)
+
 A Python reimplementation of [Watchtower](https://github.com/containrrr/watchtower)'s core
 functionality: poll running containers, compare against the registry's latest
 image digest, and recreate containers that are stale.
