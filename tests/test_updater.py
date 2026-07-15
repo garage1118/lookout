@@ -202,6 +202,78 @@ def test_run_cascades_recreate_to_network_mode_dependents() -> None:
     ) < docker_client.calls.index(f"recreate:sidecar:{sidecar.image_id}")
 
 
+def test_run_network_mode_cascade_skips_monitor_only_target() -> None:
+    # Regression test: a monitor-only target can never actually be recreated
+    # by lookout while monitor-only holds, so cascading into its
+    # network-mode dependent would be pure waste (a pointless stop/start of
+    # the dependent) every single poll, forever, with no benefit -- the
+    # dependent's stored network_mode reference is never actually at risk
+    # since the target's id never changes.
+    web = make_container(
+        "web", labels={MONITOR_ONLY_LABEL: "true"}, repo_digests=["myapp@sha256:old"]
+    )
+    sidecar = make_container(
+        "sidecar",
+        image_name="other:latest",
+        repo_digests=["other@sha256:same"],
+        network_mode="container:web",
+    )
+    docker_client = FakeDockerClient([web, sidecar])
+    registry_client = FakeRegistryClient(
+        {"myapp:latest": "sha256:new", "other:latest": "sha256:same"}
+    )
+
+    session = run(docker_client, registry_client, settings())
+
+    assert [c.name for c in session.stale] == ["web"]
+    assert session.updated == []
+    assert docker_client.calls == ["find_local_image_id:myapp:latest:sha256:new"]
+
+
+def test_run_network_mode_dependent_restarts_in_place_when_target_not_actually_recreated() -> None:
+    # Regression test: sidecar is still cascaded into session.stale because
+    # its network-mode target (web) is stale, but if web's own update turns
+    # out to be a same-image restart-in-place (e.g. --no-pull with nothing
+    # new pulled locally) rather than a real recreate, web's container id
+    # never actually changes -- sidecar's stored network_mode reference is
+    # still perfectly valid, so forcing a full recreate of sidecar too would
+    # just be a wasted stop/create/start every poll for no reason. Both
+    # containers share one image id here specifically so the fake's
+    # single-valued get_image_id() can make *both* look unchanged at once.
+    shared_image_id = "sha256:shared-old"
+    web = Container(
+        id="id-web",
+        name="web",
+        image_id=shared_image_id,
+        image_name="myapp:latest",
+        labels={},
+        inspect={},
+        repo_digests=["myapp@sha256:old"],
+    )
+    sidecar = Container(
+        id="id-sidecar",
+        name="sidecar",
+        image_id=shared_image_id,
+        image_name="other:latest",
+        labels={},
+        inspect={"HostConfig": {"NetworkMode": "container:web"}},
+        repo_digests=["other@sha256:same"],
+    )
+    docker_client = FakeDockerClient([web, sidecar])
+    docker_client.local_image_id = shared_image_id
+    registry_client = FakeRegistryClient(
+        {"myapp:latest": "sha256:new", "other:latest": "sha256:same"}
+    )
+
+    session = run(docker_client, registry_client, settings(no_pull=True))
+
+    assert {c.name for c in session.stale} == {"web", "sidecar"}
+    assert session.updated == []
+    assert "start:web" in docker_client.calls
+    assert "start:sidecar" in docker_client.calls
+    assert not any(c.startswith("recreate:") for c in docker_client.calls)
+
+
 def test_run_counts_update_as_successful_despite_post_update_hook_error() -> None:
     # The container is already recreated and started by the time the
     # post-update hook runs; a hook that errors out (distinct from one that
