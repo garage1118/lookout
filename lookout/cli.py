@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(__version__, "--version", prog_name="lookout")
 @click.option("--interval", type=int, default=None, help="Poll interval in seconds")
 @click.option("--run-once", is_flag=True, help="Run a single pass and exit")
 @click.option(

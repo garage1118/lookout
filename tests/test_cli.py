@@ -5,6 +5,7 @@ from typing import Any
 from click.testing import CliRunner
 
 import lookout.cli as cli_module
+from lookout import __version__
 from lookout.core.session import Session
 
 
@@ -15,6 +16,13 @@ class FakeDockerClient:
 
 class FakeRegistryClient:
     pass
+
+
+def test_version_flag_prints_version_and_exits() -> None:
+    result = CliRunner().invoke(cli_module.main, ["--version"])
+
+    assert result.exit_code == 0
+    assert __version__ in result.output
 
 
 def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
