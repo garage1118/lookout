@@ -341,3 +341,12 @@ every real bug in this codebase.
       Every pre-existing live network test was single-recreate, which is why this class of bug was
       invisible until now — any future change to the network carry-over logic should re-run a
       double-recreate, not just a single one.
+
+- [x] A failed pull no longer strands the container stopped (`core/updater.run`) — confirmed live
+      2026-07-15, before and after the fix. Before: a running container whose image name doesn't
+      resolve on Docker Hub (stand-in for any transient pull failure) was stopped, then the pull
+      raised, and the run ended with the container `exited` and (since `list_containers()` only
+      sees running containers) completely absent from the next poll's listing -- a single
+      transient failure turning into a permanent, invisible outage. After moving the pull ahead of
+      the stop in `run()`, the identical scenario now leaves the container `running` throughout and
+      still visible to the next poll, correctly recorded in `session.failed`.

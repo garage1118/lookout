@@ -20,10 +20,12 @@ def run(
     """
     1. list + filter containers
     2. check staleness against the registry (pinned images are skipped)
-    3. stop stale, non-monitor-only containers in dependency order, running pre-update hooks
-    4. pull (unless no-pull), recreate, start in reverse order, running post-update hooks
-    5. optionally clean up superseded images
-    6. record results into a Session
+    3. pull (unless no-pull) each stale, non-monitor-only container's replacement image,
+       before anything is stopped
+    4. stop them in dependency order, running pre-update hooks
+    5. recreate + start in reverse order, running post-update hooks
+    6. optionally clean up superseded images
+    7. record results into a Session
     """
     session = Session()
 
@@ -85,7 +87,29 @@ def run(
         c for c in session.stale if not (settings.monitor_only or c.is_monitor_only())
     ]
 
-    order = stop_order(to_update)
+    # Resolve every container's replacement image *before* stopping anything:
+    # a pull can be slow (a large image) or fail outright (registry blip,
+    # auth), and both are harmless while the container is still running. An
+    # earlier version pulled after the stop, which put the pull duration
+    # inside the downtime window and -- worse -- permanently abandoned the
+    # container when the pull failed: nothing restarted it, and
+    # list_containers() only sees running containers, so every later poll
+    # was blind to it (caught live). A container whose image can't be
+    # resolved is recorded as failed and never stopped at all.
+    new_image_ids: dict[str, str] = {}
+    for container in to_update:
+        no_pull = settings.no_pull or container.is_no_pull()
+        try:
+            new_image_ids[container.name] = (
+                docker_client.get_image_id(container.image_name)
+                if no_pull
+                else docker_client.pull_image(container.image_name)
+            )
+        except Exception as exc:
+            logger.exception("failed to pull a new image for %s", container.name)
+            session.failed.append((container, exc))
+
+    order = stop_order([c for c in to_update if c.name in new_image_ids])
     stopped: list[Container] = []
     for container in order:
         try:
@@ -99,12 +123,7 @@ def run(
     recreated_names: set[str] = set()
     for container in reversed(stopped):
         try:
-            no_pull = settings.no_pull or container.is_no_pull()
-            new_image_id = (
-                docker_client.get_image_id(container.image_name)
-                if no_pull
-                else docker_client.pull_image(container.image_name)
-            )
+            new_image_id = new_image_ids[container.name]
             # Dependencies are always processed before their network-mode
             # dependents in this loop (reversed(stopped) starts them first,
             # same as any other dependency), so by the time a dependent is

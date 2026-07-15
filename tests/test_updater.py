@@ -39,6 +39,7 @@ class FakeDockerClient:
         self._containers = list(containers)
         self.calls: list[str] = []
         self.stop_fail: set[str] = set()
+        self.pull_fail: set[str] = set()
         self.exec_fail: set[str] = set()
         self.find_local_image_id_fail: set[str] = set()
         self.removed_images: list[str] = []
@@ -49,6 +50,8 @@ class FakeDockerClient:
         return list(self._containers)
 
     def pull_image(self, image: str) -> str:
+        if image in self.pull_fail:
+            raise RuntimeError(f"pull failed: {image}")
         self.calls.append(f"pull:{image}")
         return "sha256:pulled"
 
@@ -128,10 +131,12 @@ def test_run_updates_a_stale_container() -> None:
 
     assert [c.name for c in session.stale] == ["web"]
     assert [c.name for c in session.updated] == ["web"]
+    # The replacement image is resolved before anything is stopped -- a slow
+    # or failing pull should never happen while the container is down.
     assert docker_client.calls == [
         "find_local_image_id:myapp:latest:sha256:new",
-        "stop:web",
         "pull:myapp:latest",
+        "stop:web",
         "recreate:web:sha256:pulled",
     ]
 
@@ -166,8 +171,8 @@ def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
     assert session.failed == []
     assert docker_client.calls == [
         "find_local_image_id:myapp:latest:sha256:new",
-        "stop:web",
         "get_image_id:myapp:latest",
+        "stop:web",
         "start:web",
     ]
 
@@ -322,8 +327,8 @@ def test_run_falls_back_to_local_image_lookup_when_repo_digests_orphaned() -> No
     # cheap no-op registry round-trip, not a correctness issue.
     assert docker_client.calls == [
         "find_local_image_id:myapp:latest:sha256:new",
-        "stop:web",
         "pull:myapp:latest",
+        "stop:web",
         "recreate:web:sha256:pulled",
     ]
 
@@ -416,6 +421,27 @@ def test_run_records_stop_failure_and_skips_recreate() -> None:
     assert len(session.failed) == 1
     assert session.failed[0][0].name == "web"
     assert session.updated == []
+    assert not any(c.startswith("recreate:") for c in docker_client.calls)
+
+
+def test_run_records_pull_failure_and_never_stops_the_container() -> None:
+    # Regression test: a container whose replacement image can't be pulled
+    # (registry blip, auth failure, ...) must never be stopped at all. An
+    # earlier version pulled *after* stopping, so a failure here left the
+    # container down with nothing to restart it -- and since
+    # list_containers() only sees running containers, it was invisible to
+    # every later poll too (caught live).
+    container = make_container("web", repo_digests=["myapp@sha256:old"])
+    docker_client = FakeDockerClient([container])
+    docker_client.pull_fail = {"myapp:latest"}
+    registry_client = FakeRegistryClient({"myapp:latest": "sha256:new"})
+
+    session = run(docker_client, registry_client, settings())
+
+    assert len(session.failed) == 1
+    assert session.failed[0][0].name == "web"
+    assert session.updated == []
+    assert "stop:web" not in docker_client.calls
     assert not any(c.startswith("recreate:") for c in docker_client.calls)
 
 
