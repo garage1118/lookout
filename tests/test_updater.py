@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from lookout.config import Settings
 from lookout.core.lifecycle import POST_UPDATE_LABEL
 from lookout.core.updater import run, stop_order
@@ -424,3 +426,30 @@ def test_run_cleanup_removes_superseded_image() -> None:
 
     assert docker_client.removed_images == [container.image_id]
     assert session.updated
+
+
+def test_run_warns_when_stale_targets_netns_dependent_is_filtered_out(caplog: Any) -> None:
+    # Regression test: the cascade can only recreate a dependent it can see
+    # in `targets` -- a dependent excluded via --exclude (or not matching
+    # --include, or lacking the --label-enable label) is invisible to it
+    # entirely, so its container:web reference will still go stale once web
+    # is recreated, with nothing lookout can do about it (the operator's own
+    # filtering choice) beyond surfacing a warning instead of staying silent.
+    web = make_container("web", image_name="myapp:latest", repo_digests=["myapp@sha256:old"])
+    sidecar = make_container(
+        "sidecar",
+        image_name="other:latest",
+        repo_digests=["other@sha256:same"],
+        network_mode="container:web",
+    )
+    docker_client = FakeDockerClient([web, sidecar])
+    registry_client = FakeRegistryClient(
+        {"myapp:latest": "sha256:new", "other:latest": "sha256:same"}
+    )
+
+    with caplog.at_level("WARNING"):
+        session = run(docker_client, registry_client, settings(exclude_names=["sidecar"]))
+
+    assert [c.name for c in session.stale] == ["web"]
+    assert "sidecar" in caplog.text
+    assert "web" in caplog.text

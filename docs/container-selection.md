@@ -60,6 +60,14 @@ Unlike Watchtower, which takes container names as positional CLI arguments, look
 `--include`/`--exclude` flags (or `LOOKOUT_INCLUDE_NAMES`/`LOOKOUT_EXCLUDE_NAMES`, as comma-separated
 strings). Exclude always wins: a name in both lists is excluded.
 
+Filtering out a container that shares its network namespace with a monitored one
+(`--net=container:<name>`, see [Linked containers](linked-containers.md)) is asymmetric and worth
+avoiding: lookout only stops/recreates containers it's actually monitoring, so a filtered-out
+network-mode dependent can't be cascaded into a same-run recreate alongside its target the way an
+in-scope one is. Its `container:<name>` reference will go stale the next time the target is
+recreated. lookout logs a warning when it detects this (a stale target with a filtered-out
+dependent), but there's no fix short of including the dependent too.
+
 ## Monitor only
 
 Individual containers can be marked to be checked and reported on, but never actually

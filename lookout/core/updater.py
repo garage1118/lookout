@@ -72,7 +72,7 @@ def run(
         if stale:
             session.stale.append(container)
 
-    _cascade_network_mode_dependents(targets, session, settings)
+    _cascade_network_mode_dependents(targets, containers, session, settings)
 
     to_update = [
         c for c in session.stale if not (settings.monitor_only or c.is_monitor_only())
@@ -155,7 +155,10 @@ def _is_stale(docker_client: DockerClient, container: Container, latest_digest: 
 
 
 def _cascade_network_mode_dependents(
-    targets: list[Container], session: Session, settings: Settings
+    targets: list[Container],
+    all_containers: list[Container],
+    session: Session,
+    settings: Settings,
 ) -> None:
     """Mark as stale any container sharing its network namespace with
     something already marked stale this run, even though its own image is
@@ -183,6 +186,14 @@ def _cascade_network_mode_dependents(
     against, ever — cascading anyway would just stop/start the dependent on
     every single poll for as long as the target stays monitor-only-stale,
     for no benefit.
+
+    `all_containers` is the *pre-filter* list (before core/filter.apply()),
+    used only to warn about a network-mode dependent this cascade can't
+    reach at all because --include/--exclude/--label-enable filtered it out
+    of `targets` entirely: the same dead-reference gap this whole mechanism
+    exists to close, but with no fix available short of the operator
+    adjusting their filters, since a container outside the monitored set is
+    never stopped/recreated/started by lookout in the first place.
     """
     stale_names = {c.name for c in session.stale}
     by_name = {c.name: c for c in targets}
@@ -201,6 +212,26 @@ def _cascade_network_mode_dependents(
             session.stale.append(container)
             stale_names.add(container.name)
             changed = True
+
+    for container in all_containers:
+        if container.name in by_name:
+            continue  # in scope -- already handled (or ruled out) above
+        target_name = container.network_mode_target()
+        if target_name not in stale_names:
+            continue
+        target = by_name.get(target_name)
+        if target is not None and (settings.monitor_only or target.is_monitor_only()):
+            continue
+        logger.warning(
+            "%s shares its network namespace with %s, which is stale and being recreated "
+            "this run, but %s is filtered out of lookout's monitored set -- its network_mode "
+            "reference will go stale once %s is recreated, since lookout never stops/starts "
+            "containers outside the monitored set",
+            container.name,
+            target_name,
+            container.name,
+            target_name,
+        )
 
 
 def stop_order(containers: list[Container]) -> list[Container]:
