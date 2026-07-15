@@ -25,6 +25,37 @@ def test_version_flag_prints_version_and_exits() -> None:
     assert __version__ in result.output
 
 
+def test_include_exclude_split_comma_separated_values(monkeypatch: Any) -> None:
+    # Regression test: LOOKOUT_INCLUDE_NAMES=a,b (env) splits on commas, but
+    # --include a,b (CLI, single flag) used to produce the literal name
+    # "a,b" that matches nothing -- a silent footgun for anyone using the
+    # comma spelling out of habit from the env var. Both spellings must now
+    # produce the same result.
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+
+    captured_settings = []
+    monkeypatch.setattr(
+        cli_module,
+        "run_update",
+        lambda dc, rc, settings: captured_settings.append(settings) or Session(),
+    )
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.main,
+        ["--run-once", "--include", "a,b", "--exclude", "c, d"],
+    )
+
+    assert result.exit_code == 0, result.output
+    settings = captured_settings[0]
+    assert settings.include_names == ["a", "b"]
+    assert settings.exclude_names == ["c", "d"]
+
+
 def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)

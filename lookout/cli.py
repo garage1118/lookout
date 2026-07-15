@@ -17,6 +17,16 @@ from lookout.scheduler import run_forever
 logger = logging.getLogger(__name__)
 
 
+def _split_names(values: tuple[str, ...]) -> list[str]:
+    """--include/--exclude are repeatable flags, but the env var equivalents
+    (LOOKOUT_INCLUDE_NAMES=web,api) are comma-separated -- without this, a
+    user reflexively writing --include web,api (comma, single flag, like the
+    env var) got a single literal name "web,api" that matches nothing, a
+    silent footgun. Splitting each value on commas makes both spellings
+    equivalent instead of just the repeated-flag one."""
+    return [name.strip() for value in values for name in value.split(",") if name.strip()]
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, "--version", prog_name="lookout")
 @click.option("--interval", type=int, default=None, help="Poll interval in seconds")
@@ -25,13 +35,13 @@ logger = logging.getLogger(__name__)
     "--include",
     "include_names",
     multiple=True,
-    help="Only monitor this container name (repeatable)",
+    help="Only monitor this container name (repeatable, or comma-separated)",
 )
 @click.option(
     "--exclude",
     "exclude_names",
     multiple=True,
-    help="Never monitor this container name (repeatable)",
+    help="Never monitor this container name (repeatable, or comma-separated)",
 )
 @click.option(
     "--label-enable",
@@ -84,9 +94,9 @@ def main(
     if interval is not None:
         settings.interval_seconds = interval
     if include_names:
-        settings.include_names = list(include_names)
+        settings.include_names = _split_names(include_names)
     if exclude_names:
-        settings.exclude_names = list(exclude_names)
+        settings.exclude_names = _split_names(exclude_names)
     if label_enable is not None:
         settings.label_enable = label_enable
     if cleanup is not None:
