@@ -13,9 +13,6 @@ class Settings(BaseSettings):
     )
 
     interval_seconds: int = Field(default=300, gt=0, description="Poll interval, in seconds")
-    cron_schedule: str | None = Field(
-        default=None, description="Cron expression; overrides interval"
-    )
 
     include_names: Annotated[list[str], NoDecode] = Field(default_factory=list)
     exclude_names: Annotated[list[str], NoDecode] = Field(default_factory=list)

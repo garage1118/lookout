@@ -17,9 +17,9 @@ modules that touch them. Both are listed here so they're not mistaken for bugs.
 
 ## Scheduling
 
-Only simple interval polling (`--interval`/`LOOKOUT_INTERVAL_SECONDS`) is implemented. `Settings`
-has a `cron_schedule` field reserved for future cron-style scheduling, but nothing currently reads
-or acts on it — setting it has no effect.
+Only simple interval polling (`--interval`/`LOOKOUT_INTERVAL_SECONDS`) is implemented. Cron-style
+scheduling isn't — see `scheduler.py`'s `run_forever()`, which is written so a cron-based scheduler
+could replace its sleep loop later without touching the update logic itself.
 
 ## Container recreation
 
