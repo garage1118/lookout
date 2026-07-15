@@ -59,3 +59,11 @@ def test_invalid_log_level_rejected_with_friendly_message() -> None:
 def test_log_level_is_normalized_to_uppercase() -> None:
     settings = Settings(_env_file=None, log_level="debug")
     assert settings.log_level == "DEBUG"
+
+
+def test_registry_password_does_not_leak_via_repr() -> None:
+    settings = Settings(_env_file=None, registry_password="super-secret")
+    assert "super-secret" not in repr(settings)
+    assert "super-secret" not in str(settings)
+    assert settings.registry_password is not None
+    assert settings.registry_password.get_secret_value() == "super-secret"

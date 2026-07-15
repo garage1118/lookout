@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -59,7 +59,9 @@ class Settings(BaseSettings):
         description="Fallback registry credentials for registry_host, used only when config.json "
         "has no matching entry",
     )
-    registry_password: str | None = Field(default=None)
+    registry_password: SecretStr | None = Field(
+        default=None, description="Not a plain str so it can't leak via a Settings repr/log line"
+    )
 
     log_level: str = Field(default="INFO")
 

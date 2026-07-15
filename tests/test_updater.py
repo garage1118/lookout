@@ -98,8 +98,10 @@ class FakeRegistryClient:
     def __init__(self, digests: dict[str, str], errors: set[str] | None = None) -> None:
         self.digests = digests
         self.errors = errors or set()
+        self.received_auth: list[object] = []
 
     def get_latest_digest(self, image: str, auth: object, cache: object = None) -> str:
+        self.received_auth.append(auth)
         if image in self.errors:
             raise RuntimeError(f"registry unreachable: {image}")
         return self.digests[image]
@@ -453,3 +455,30 @@ def test_run_warns_when_stale_targets_netns_dependent_is_filtered_out(caplog: An
     assert [c.name for c in session.stale] == ["web"]
     assert "sidecar" in caplog.text
     assert "web" in caplog.text
+
+
+def test_run_unwraps_registry_password_secret_for_fallback_auth() -> None:
+    # Regression test: registry_password is a SecretStr (so it can't leak
+    # via a Settings repr/log line) -- run() must unwrap it with
+    # get_secret_value() before building RegistryAuth, not pass the
+    # SecretStr object itself through to the registry client.
+    container = make_container(
+        "web", image_name="registry.example.com/myapp:latest", repo_digests=[]
+    )
+    docker_client = FakeDockerClient([container])
+    registry_client = FakeRegistryClient({"registry.example.com/myapp:latest": "sha256:new"})
+
+    run(
+        docker_client,
+        registry_client,
+        settings(
+            registry_host="registry.example.com",
+            registry_username="user",
+            registry_password="the-actual-secret",
+        ),
+    )
+
+    assert len(registry_client.received_auth) == 1
+    auth = registry_client.received_auth[0]
+    assert auth is not None
+    assert auth.password == "the-actual-secret"  # type: ignore[attr-defined]

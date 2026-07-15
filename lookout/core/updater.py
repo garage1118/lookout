@@ -31,7 +31,14 @@ def run(
     targets = filter_.apply(containers, settings)
 
     fallback_auth = (
-        RegistryAuth(username=settings.registry_username, password=settings.registry_password)
+        RegistryAuth(
+            username=settings.registry_username,
+            password=(
+                settings.registry_password.get_secret_value()
+                if settings.registry_password
+                else None
+            ),
+        )
         if settings.registry_username and settings.registry_host
         else None
     )
