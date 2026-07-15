@@ -61,7 +61,16 @@ def _from_config(image: str, docker_config_path: str | None) -> RegistryAuth | N
         return None
 
     registry = parse_image(image).registry
-    entry = auths.get(registry)
+    # `docker login` itself always writes a bare host, but some other tools
+    # (Kubernetes imagePullSecrets, some CI credential helpers) write a
+    # scheme-prefixed key like "https://registry.example.com" for a non-Hub
+    # registry -- try those variants too instead of silently falling through
+    # to anonymous.
+    entry = (
+        auths.get(registry)
+        or auths.get(f"https://{registry}")
+        or auths.get(f"http://{registry}")
+    )
     if entry is None and registry in _DOCKER_HUB_CONFIG_KEYS:
         entry = next((auths[key] for key in _DOCKER_HUB_CONFIG_KEYS if key in auths), None)
     if not entry:

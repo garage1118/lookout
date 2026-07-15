@@ -27,6 +27,22 @@ def test_resolves_credentials_from_config_json(tmp_path: Any) -> None:
     assert auth == RegistryAuth(username="alice", password="hunter2")
 
 
+def test_resolves_credentials_from_scheme_prefixed_config_key(tmp_path: Any) -> None:
+    # Regression test: docker login itself always writes a bare host, but
+    # some other tools (Kubernetes imagePullSecrets, some CI credential
+    # helpers) write a scheme-prefixed key for a non-Hub registry -- this
+    # used to silently fall through to anonymous.
+    config_path = tmp_path / "config.json"
+    write_config(
+        config_path,
+        {"https://registry.example.com": {"auth": basic_auth("alice", "hunter2")}},
+    )
+
+    auth = resolve_auth("registry.example.com/myapp:latest", docker_config_path=str(config_path))
+
+    assert auth == RegistryAuth(username="alice", password="hunter2")
+
+
 def test_no_config_file_and_no_fallback_returns_none(tmp_path: Any) -> None:
     missing = tmp_path / "does-not-exist.json"
 
