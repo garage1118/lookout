@@ -381,3 +381,10 @@ every real bug in this codebase.
       resolved image already equals its current `image_id` from the stop/start cycle entirely, via
       `noop_names`): both id and `StartedAt` stayed byte-for-byte identical across both runs — the
       container is left completely untouched, still correctly counted in `stale` but not `updated`.
+
+- [x] Containers with no tagged image name are skipped cleanly (`docker/container.py`
+      `has_no_tagged_image_name`, `core/updater.run`) — confirmed live 2026-07-15. A container run
+      directly from an image id (`docker run <image-id>`, no repository/tag) was checked across two
+      consecutive `run()` passes: correctly landed in `session.skipped` with reason "no tagged image
+      name" both times, no registry HTTP call attempted, and no exception/traceback logged on either
+      poll. No bugs found.
