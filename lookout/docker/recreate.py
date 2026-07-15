@@ -16,6 +16,12 @@ Known simplifications, not yet handled:
   with, with no way to tell in hindsight whether it came from `-P` or a fixed
   `-p hostport:containerport`. Watchtower has the exact same behavior for the
   same reason (it replays the original PortBindings verbatim too).
+- `ExposedPorts` is copied as-is, including entries that only exist because
+  the *old* image declared them via `EXPOSE` (as opposed to `Cmd`/`Env`/
+  `Labels`/etc., which are subtracted against the old image's own `Config` in
+  `build_create_kwargs` so the new image's defaults can take over). Harmless
+  in practice -- it only affects which ports Docker reports as exposed
+  metadata, not which are actually published -- so it's left unsubtracted.
 """
 
 from __future__ import annotations
@@ -52,10 +58,23 @@ class RecreateSpec:
     networks: list[NetworkAttachment] = field(default_factory=list)
 
 
-def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec:
+def build_create_kwargs(
+    container: Container, new_image_id: str, old_image_config: dict[str, Any] | None = None
+) -> RecreateSpec:
+    """`old_image_config` is the `Config` block of the image the container is
+    *currently* running (not the new image) — pass it so values that are
+    only sitting in the container's inspect because the old image baked
+    them in as defaults (not because a user explicitly overrode them) can be
+    left out of `kwargs`, letting the new image's own defaults apply
+    instead. `docker inspect`'s `Config` is a merge of user-supplied options
+    and the image's own defaults, with no way to tell them apart directly —
+    e.g. an un-overridden `ENV PATH=...` from the image shows up identically
+    to a real `-e` override. Omit it (leave `old_image_config` as `None`/
+    `{}`) to fall back to copying everything verbatim, as before."""
     inspect = container.inspect
     config = inspect.get("Config") or {}
     host_config = inspect.get("HostConfig") or {}
+    image_config = old_image_config or {}
 
     kwargs: dict[str, Any] = {
         "image": new_image_id,
@@ -63,19 +82,25 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
         "detach": True,
     }
 
-    if config.get("Cmd"):
+    if config.get("Cmd") and config.get("Cmd") != image_config.get("Cmd"):
         kwargs["command"] = config["Cmd"]
-    if config.get("Entrypoint"):
+    if config.get("Entrypoint") and config.get("Entrypoint") != image_config.get("Entrypoint"):
         kwargs["entrypoint"] = config["Entrypoint"]
     if config.get("Env"):
-        kwargs["environment"] = config["Env"]
+        old_env = set(image_config.get("Env") or [])
+        env = [e for e in config["Env"] if e not in old_env]
+        if env:
+            kwargs["environment"] = env
     if config.get("Labels"):
-        kwargs["labels"] = config["Labels"]
-    if config.get("WorkingDir"):
+        old_labels = image_config.get("Labels") or {}
+        labels = {k: v for k, v in config["Labels"].items() if old_labels.get(k) != v}
+        if labels:
+            kwargs["labels"] = labels
+    if config.get("WorkingDir") and config.get("WorkingDir") != image_config.get("WorkingDir"):
         kwargs["working_dir"] = config["WorkingDir"]
-    if config.get("User"):
+    if config.get("User") and config.get("User") != image_config.get("User"):
         kwargs["user"] = config["User"]
-    if config.get("StopSignal"):
+    if config.get("StopSignal") and config.get("StopSignal") != image_config.get("StopSignal"):
         kwargs["stop_signal"] = config["StopSignal"]
     if config.get("StopTimeout") is not None:
         kwargs["stop_timeout"] = config["StopTimeout"]
@@ -165,7 +190,12 @@ def build_create_kwargs(container: Container, new_image_id: str) -> RecreateSpec
     if ipc_mode and ipc_mode != "private":
         kwargs["ipc_mode"] = ipc_mode
 
-    healthcheck = _build_healthcheck(config.get("Healthcheck"))
+    container_healthcheck = config.get("Healthcheck")
+    if container_healthcheck == image_config.get("Healthcheck"):
+        # Unmodified since the old image's own HEALTHCHECK -- leave unset so
+        # the new image's (possibly different) HEALTHCHECK takes effect.
+        container_healthcheck = None
+    healthcheck = _build_healthcheck(container_healthcheck)
     if healthcheck is not None:
         kwargs["healthcheck"] = healthcheck
 

@@ -548,3 +548,157 @@ def test_comprehensive_container_caps_and_ports() -> None:
 
     assert spec.create_kwargs["cap_add"] == ["CAP_NET_ADMIN"]
     assert spec.create_kwargs["ports"] == {"80/tcp": "18080"}
+
+
+def _container_with_config(config: dict[str, object]) -> Container:
+    return Container(
+        id="abc123",
+        name="old-image-config-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={"Config": config, "HostConfig": {}},
+    )
+
+
+def test_cmd_and_entrypoint_unchanged_from_image_are_omitted() -> None:
+    # Regression test: Config.Cmd/Entrypoint is a merge of the image's own
+    # default and any user override -- docker inspect can't tell them apart.
+    # If the container's Cmd/Entrypoint exactly matches the *old* image's own
+    # default (no real override), it must be left out of kwargs so a new
+    # image's own (possibly different) default takes effect, rather than
+    # permanently pinning the old image's default forward.
+    container = _container_with_config(
+        {"Cmd": ["/old-default"], "Entrypoint": ["/old-entry"]}
+    )
+    old_image_config = {"Cmd": ["/old-default"], "Entrypoint": ["/old-entry"]}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert "command" not in spec.create_kwargs
+    assert "entrypoint" not in spec.create_kwargs
+
+
+def test_cmd_and_entrypoint_overridden_by_user_are_kept() -> None:
+    container = _container_with_config(
+        {"Cmd": ["/user-override"], "Entrypoint": ["/user-entry"]}
+    )
+    old_image_config = {"Cmd": ["/old-default"], "Entrypoint": ["/old-entry"]}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert spec.create_kwargs["command"] == ["/user-override"]
+    assert spec.create_kwargs["entrypoint"] == ["/user-entry"]
+
+
+def test_env_entries_matching_old_image_default_are_dropped() -> None:
+    container = _container_with_config(
+        {"Env": ["PATH=/usr/local/bin:/usr/bin", "FOO=user-set"]}
+    )
+    old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert spec.create_kwargs["environment"] == ["FOO=user-set"]
+
+
+def test_env_entirely_matching_old_image_is_omitted() -> None:
+    container = _container_with_config({"Env": ["PATH=/usr/local/bin:/usr/bin"]})
+    old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert "environment" not in spec.create_kwargs
+
+
+def test_env_override_of_same_key_with_different_value_is_kept() -> None:
+    # A user's `-e PATH=/custom` produces a different exact string than the
+    # image's own PATH default, so it must survive the subtraction.
+    container = _container_with_config({"Env": ["PATH=/custom"]})
+    old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert spec.create_kwargs["environment"] == ["PATH=/custom"]
+
+
+def test_labels_matching_old_image_default_are_dropped() -> None:
+    container = _container_with_config(
+        {"Labels": {"org.opencontainers.image.version": "1.0", "custom": "user-set"}}
+    )
+    old_image_config = {"Labels": {"org.opencontainers.image.version": "1.0"}}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert spec.create_kwargs["labels"] == {"custom": "user-set"}
+
+
+def test_working_dir_user_stop_signal_unchanged_from_image_are_omitted() -> None:
+    container = _container_with_config(
+        {"WorkingDir": "/old-app", "User": "olduser", "StopSignal": "SIGUSR1"}
+    )
+    old_image_config = {"WorkingDir": "/old-app", "User": "olduser", "StopSignal": "SIGUSR1"}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert "working_dir" not in spec.create_kwargs
+    assert "user" not in spec.create_kwargs
+    assert "stop_signal" not in spec.create_kwargs
+
+
+def test_healthcheck_unchanged_from_image_is_omitted() -> None:
+    healthcheck = {
+        "Test": ["CMD-SHELL", "echo ok"],
+        "Interval": 5_000_000_000,
+        "Timeout": 2_000_000_000,
+        "StartPeriod": 1_000_000_000,
+        "Retries": 2,
+    }
+    container = _container_with_config({"Healthcheck": healthcheck})
+    old_image_config = {"Healthcheck": healthcheck}
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert "healthcheck" not in spec.create_kwargs
+
+
+def test_healthcheck_overridden_by_user_is_kept() -> None:
+    container = _container_with_config(
+        {
+            "Healthcheck": {
+                "Test": ["CMD-SHELL", "echo custom"],
+                "Interval": 0,
+                "Timeout": 0,
+                "StartPeriod": 0,
+                "Retries": 0,
+            }
+        }
+    )
+    old_image_config = {
+        "Healthcheck": {
+            "Test": ["CMD-SHELL", "echo ok"],
+            "Interval": 5_000_000_000,
+            "Timeout": 2_000_000_000,
+            "StartPeriod": 1_000_000_000,
+            "Retries": 2,
+        }
+    }
+
+    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+
+    assert spec.create_kwargs["healthcheck"]["Test"] == ["CMD-SHELL", "echo custom"]
+
+
+def test_no_old_image_config_falls_back_to_verbatim_copy() -> None:
+    # Comprehensive fixture with no old_image_config argument at all --
+    # existing (pre-subtraction) behavior must be unaffected.
+    container = load("comprehensive")
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "FOO=bar" in spec.create_kwargs["environment"]
+    assert spec.create_kwargs["labels"] == {
+        "com.example.label1": "value1",
+        "com.example.label2": "value2",
+    }
+    assert spec.create_kwargs["healthcheck"]["Test"] == ["CMD-SHELL", "echo ok"]

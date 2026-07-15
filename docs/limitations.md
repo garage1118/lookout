@@ -26,6 +26,14 @@ or acts on it — setting it has no effect.
 `docker/recreate.py` translates a running container's config into create-kwargs for its
 replacement.
 
+`Cmd`, `Entrypoint`, `Env`, `Labels`, `WorkingDir`, `User`, `StopSignal`, and `Healthcheck` are
+subtracted against the *old* image's own `Config` before being copied onto the replacement — a
+value that only appears in the container's inspect because the old image baked it in as a default
+(not because it was ever explicitly overridden) is left out, so the new image's own default takes
+over instead of being permanently shadowed. `ExposedPorts` is not subtracted this way (an
+old-image-only `EXPOSE` entry is copied over as harmless metadata, not a functional override) — see
+`docker/recreate.py`'s module docstring.
+
 Non-bridge/custom `NetworkMode` values other than `container:<id>` (e.g. `host`, or an exotic
 driver-specific mode) are passed through as `network_mode` but not validated against a live
 daemon before the recreate call — deliberately left out of v1 since an invalid value already fails

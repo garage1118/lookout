@@ -249,3 +249,15 @@ every real bug in this codebase.
       `NetworkMode` also references the dead target id) — expected, and correctly logged without
       masking the original error, not a flaw in this fix. The cascading-recreate fix above closes
       that scenario entirely now, so it no longer applies in practice.
+
+## Not yet confirmed
+
+- [ ] Old-image config subtraction for `Cmd`/`Entrypoint`/`Env`/`Labels`/`WorkingDir`/`User`/
+      `StopSignal`/`Healthcheck` (`docker/recreate.py` `build_create_kwargs`,
+      `docker/client.py` `DockerPyClient._image_config`) — added during code review (not caught
+      live). Unit-tested against hand-built Config dicts, but the real-world case this targets
+      (recreating onto an image whose own `CMD`/`ENV`/`HEALTHCHECK` default genuinely changed from
+      the old image, e.g. two different tags of a real image, not a hand-crafted fixture) hasn't
+      been exercised against a live daemon yet. Needs: a container started from image A, image B
+      published under the same tag with a different default `CMD` and `HEALTHCHECK`, confirm the
+      recreated container picks up B's defaults rather than A's.

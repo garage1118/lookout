@@ -112,6 +112,18 @@ class DockerPyClient:
             return []
         return list(digests) if digests else []
 
+    def _image_config(self, image_id: str) -> dict[str, Any]:
+        """Config block of the currently-running image, for
+        build_create_kwargs() to subtract from the container's own (merged)
+        Config -- see that function's docstring. Missing image (e.g. removed
+        out from under a running container) falls back to an empty dict,
+        same as "nothing to subtract" / today's behavior."""
+        try:
+            config = self._client.images.get(image_id).attrs.get("Config")
+        except docker_sdk.errors.NotFound:
+            return {}
+        return dict(config) if config else {}
+
     def pull_image(self, image: str) -> str:
         pulled = self._client.images.pull(image)
         return str(pulled.id)
@@ -165,7 +177,7 @@ class DockerPyClient:
         intervention, on top of whatever the update failure itself already
         cost.
         """
-        spec = build_create_kwargs(container, new_image_id)
+        spec = build_create_kwargs(container, new_image_id, self._image_config(container.image_id))
         temp_name = f"{container.name}-lookout-old"
         self.rename(container, temp_name)
         new_container = None
