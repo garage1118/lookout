@@ -904,6 +904,36 @@ def test_bridge_mode_container_connected_to_extra_network_is_carried_over() -> N
     assert "network_mode" not in spec.create_kwargs
 
 
+def test_bridge_mode_container_on_single_custom_network_is_carried_over() -> None:
+    # Regression test: this is the exact shape lookout's own recreate()
+    # produces for a `docker run --network my_net` container — created on
+    # the default bridge (so NetworkMode is "bridge"/"default" from then
+    # on), then swapped onto the real network. The old `len(networks) <= 1`
+    # early return treated any single attachment under a default NetworkMode
+    # as "just the bridge", so the container's *second* recreate silently
+    # dropped the custom network and landed it back on the plain bridge
+    # (confirmed live). The check must look at the attachment names, not
+    # count them.
+    container = Container(
+        id="abc123",
+        name="custom-net-after-recreate-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"NetworkMode": "bridge"},
+            "NetworkSettings": {"Networks": {"mynet": {"Aliases": ["myapp"]}}},
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    names = {n.name: n.aliases for n in spec.networks}
+    assert names == {"mynet": ["myapp"]}
+    assert "network_mode" not in spec.create_kwargs
+
+
 def test_host_mode_never_attaches_extra_networks() -> None:
     container = Container(
         id="abc123",

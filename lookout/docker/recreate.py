@@ -391,17 +391,25 @@ def _build_networks(inspect: dict[str, Any], mode: str) -> list[NetworkAttachmen
     if mode in _NO_EXTRA_NETWORKS_MODES or mode.startswith("container:"):
         return []
     networks = inspect.get("NetworkSettings", {}).get("Networks") or {}
-    if mode in _DEFAULT_NETWORK_MODES and len(networks) <= 1:
-        # A single default-bridge attachment (the common case) needs no
-        # explicit handling here -- create() auto-attaches it. More than one
-        # entry means the container was additionally attached to a custom
-        # network after creation via `docker network connect`, which
-        # NetworkMode itself never reflects (it only ever names the
-        # *primary* network from create time) -- carry all of them over
-        # explicitly in that case, same as a container created directly on a
-        # custom network below (including the "bridge" entry itself, so the
+    if mode in _DEFAULT_NETWORK_MODES and set(networks) <= {"bridge"}:
+        # Attached to nothing but the default bridge (the common case) needs
+        # no explicit handling here -- create() auto-attaches it. Anything
+        # else under a default-mode NetworkMode must be carried over
+        # explicitly, because NetworkMode alone can't be trusted to describe
+        # the container's real attachments: it only ever names the *primary*
+        # network from create time, never reflecting a later `docker network
+        # connect` -- and lookout's own recreate() produces exactly that
+        # shape (create on the default bridge, then swap in the real
+        # networks), so the mode of anything lookout has recreated once is
+        # always "bridge"/"default" no matter which networks it's actually
+        # on. Checking the attachment *names* rather than counting them is
+        # what keeps a second recreate from silently dropping a custom
+        # network (caught live: a `--network my_net` container survived its
+        # first recreate but landed back on the plain bridge after its
+        # second). The "bridge" entry itself is included in the carry-over
+        # list when mixed with custom networks, so the
         # disconnect-then-reconnect-everything-listed dance in
-        # DockerPyClient.recreate() puts it back too).
+        # DockerPyClient.recreate() puts it back too.
         return []
     attachments = []
     for name, cfg in networks.items():

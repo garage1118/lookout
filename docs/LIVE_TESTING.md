@@ -325,3 +325,19 @@ every real bug in this codebase.
       all succeeded and returned real `sha256:...` digests, completing in well under a second
       total. No bugs found — connection reuse across images/registries doesn't affect correctness,
       only round-trip cost.
+
+## Findings from the second 2026-07-15 code review, confirmed live
+
+- [x] Custom network no longer lost on the *second* recreate (`docker/recreate.py`
+      `_build_networks`) — the bug and the fix were both confirmed live 2026-07-15. A busybox
+      container created with `--network cr-net` was recreated twice in a row via
+      `DockerPyClient.recreate()`: before the fix, recreate #1 kept `cr-net` (while demoting
+      `NetworkMode` from `cr-net` to `bridge`, since recreate() creates on the default bridge and
+      swaps networks in afterward), but recreate #2 — now seeing `NetworkMode: "bridge"` with a
+      single attachment — hit the `len(networks) <= 1` early return, treated it as a plain
+      default-bridge container, and landed it on `bridge` with `cr-net` silently gone. After the
+      fix (early return only when the lone attachment actually *is* the bridge:
+      `set(networks) <= {"bridge"}`), the same double-recreate keeps `cr-net` through both cycles.
+      Every pre-existing live network test was single-recreate, which is why this class of bug was
+      invisible until now — any future change to the network carry-over logic should re-run a
+      double-recreate, not just a single one.
