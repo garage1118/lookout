@@ -283,3 +283,10 @@ every real bug in this codebase.
       `--mount type=tmpfs,tmpfs-size=64m` container recreated and its tmpfs mount + size confirmed
       afterward) since their exact `docker inspect` shape was inferred from Docker's API docs, not
       captured from a live container.
+- [ ] Stale `<name>-lookout-old` cleanup before rename (`docker/client.py`
+      `_remove_stale_temp_container`) — added during code review (not caught live). No automated
+      test at all (would need to simulate a crash mid-recreate, i.e. a real orphaned container of
+      that name already present). Needs: manually create `<container>-lookout-old` as a stopped
+      container standing in for a crash-orphan, then trigger a real update of `<container>` and
+      confirm recreate() succeeds instead of hitting a 409 name conflict on the rename, and that
+      the orphan is gone afterward.

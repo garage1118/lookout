@@ -195,9 +195,20 @@ class DockerPyClient:
         unplanned downtime until the next successful poll or manual
         intervention, on top of whatever the update failure itself already
         cost.
+
+        A `<name>-lookout-old` container can be left behind by a *previous*
+        recreate() that never reached its own final removal step (process
+        killed between the rename and the remove, or that remove() itself
+        failing after a successful start — see below): list_containers()
+        only sees running containers, so such an orphan is invisible to
+        lookout's normal polling, but it still occupies the temp name below
+        -- without clearing it first, the rename would hit a 409 name
+        conflict and this container's updates would fail identically,
+        forever, until someone removed the orphan by hand.
         """
         spec = build_create_kwargs(container, new_image_id, self._image_config(container.image_id))
         temp_name = f"{container.name}-lookout-old"
+        self._remove_stale_temp_container(temp_name)
         self.rename(container, temp_name)
         new_container = None
         try:
@@ -239,9 +250,39 @@ class DockerPyClient:
                 )
             raise
 
-        self._client.containers.get(container.id).remove()
+        try:
+            self._client.containers.get(container.id).remove()
+        except Exception:
+            # The update itself already succeeded (new_container is created,
+            # network-attached, and running) -- don't let a cleanup failure
+            # here turn that into a reported failure. Left behind as
+            # <name>-lookout-old; cleaned up automatically by
+            # _remove_stale_temp_container() on this container's next
+            # recreate(), whenever that next happens.
+            logger.exception(
+                "recreate of %s succeeded but removing the old container (renamed to %s) failed",
+                container.name,
+                temp_name,
+            )
 
         return Container.from_inspect(self._client.containers.get(new_container.id).attrs)
+
+    def _remove_stale_temp_container(self, temp_name: str) -> None:
+        """Best-effort removal of a `<name>-lookout-old` container left over
+        from a previous recreate() that didn't reach its own cleanup step —
+        see recreate()'s docstring. Not found is the overwhelmingly common
+        case (no prior crash) and is silently fine; any other failure is
+        logged but not fatal, since the rename right after this will simply
+        fail loudly (and retryably) on its own if the conflict is still
+        there."""
+        try:
+            self._client.containers.get(temp_name).remove(force=True)
+        except docker_sdk.errors.NotFound:
+            pass
+        except Exception:
+            logger.exception(
+                "failed to remove stale leftover container %s before recreate", temp_name
+            )
 
     def _create(self, create_kwargs: dict[str, Any]) -> Any:
         """containers.create(), except for two cases that need the
