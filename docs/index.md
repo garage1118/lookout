@@ -11,19 +11,13 @@ update loop — see the [Limitations](limitations.md) page for what's deliberate
 
 ## Quick start
 
-There is no published image yet — build it locally from the repo:
-
-```bash
-docker build -t lookout .
-```
-
 lookout needs the Docker socket to see and manage containers:
 
 ```bash
 docker run -d \
   --name lookout \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  lookout
+  garage1118/lookout:latest
 ```
 
 Or with Compose:
@@ -31,7 +25,7 @@ Or with Compose:
 ```yaml
 services:
   lookout:
-    build: .
+    image: garage1118/lookout:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
@@ -45,7 +39,13 @@ To run a single check-and-update pass instead of running as a daemon:
 ```bash
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  lookout --run-once --log-level DEBUG
+  garage1118/lookout:latest --run-once --log-level DEBUG
+```
+
+To build from source instead (e.g. for development):
+
+```bash
+docker build -t lookout .
 ```
 
 ## Documentation
