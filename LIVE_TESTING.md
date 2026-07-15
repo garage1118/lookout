@@ -180,18 +180,25 @@ every real bug in this codebase.
       `200` and digest instead of `401`. No bugs found. (Note: this check briefly printed the
       resolved password to a terminal in this session — that credential was flagged to the
       operator as compromised and should be rotated; not a code issue, a testing-hygiene mistake.)
-- [x] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — partially
-      confirmed live 2026-07-14. Verified the best-effort exception handling is robust: on this
-      host, a retagged-but-still-container-referenced image becomes fully untracked by Docker
-      (`docker image inspect` returns `404`, not the classically-expected "409 image in use")
-      faster than expected — apparently a trait of this host's containerd-backed image store, not
-      a lookout issue. `remove_image()` hit that `404` and `_cleanup_images` correctly logged
-      `"skipping cleanup of ... (still in use?)"` and moved on without crashing the run, which is
-      the documented contract. Could **not** directly observe the straightforward happy path
-      (image has zero other references, `remove_image()` succeeds) on this host, since by the time
-      cleanup runs the old image had already vanished for the reason above regardless of what
-      lookout does. Worth a re-check on a host with classic overlay2 storage if that matters before
-      1.0.
+- [x] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — confirmed live
+      2026-07-14/15, both directions. First attempt used a **locally `docker build`-produced**
+      image for the "before"/"after" pair, and found that on this host a locally-built image with
+      only a container referencing it (no tag left after the retag) becomes fully untracked by
+      Docker within the same moment the tag moves away (`docker image inspect` returns `404`
+      immediately, even while a running container still references it) — apparently specific to
+      how this host's BuildKit/containerd setup handles locally-built images, not something
+      lookout's cleanup code can do anything about. `remove_image()` correctly hit that `404` and
+      `_cleanup_images` logged `"skipping cleanup of ... (still in use?)"` and moved on without
+      crashing the run — confirms the best-effort contract holds up even against an unexpected
+      `404`, not just the documented "409 in use" case. That test wasn't representative of real
+      usage, though: lookout only ever deals with **pulled** images, not locally-built ones.
+      Redone with a real pulled image (`alpine:3.19` → `alpine:3.20` under a shared tag, the old
+      tag fully removed so only the container references it, matching a real registry-driven
+      update exactly): the old image stayed reachable after the retag (unlike the locally-built
+      case), and after a real recreate, `_cleanup_images`'s `DELETE /images/<old-id>` call
+      succeeded (`200`) — confirmed via `docker image inspect` that the old image was genuinely
+      gone afterward, new container running the updated image throughout. Both the best-effort
+      failure path and the real happy-path removal are now confirmed live.
 
 ## Known gap found during this session, fixed
 
@@ -237,7 +244,8 @@ every real bug in this codebase.
       (recreate onto a nonexistent image id) unrelated to the network-mode gap: same container id,
       same name, `status=running` afterward — a failed update no longer means unplanned downtime
       on top of the update failure itself. Re-tried against the `container:<id>` cross-run
-      scenario specifically: the restart attempt itself failed there too, for the *same*
-      underlying reason (the old container's own stored `NetworkMode` also references the dead
-      target id) — expected, and correctly logged without masking the original error, not a flaw
-      in this fix. That scenario remains open, see below.
+      scenario specifically (before that gap was fixed, see above): the restart attempt itself
+      failed there too, for the *same* underlying reason (the old container's own stored
+      `NetworkMode` also references the dead target id) — expected, and correctly logged without
+      masking the original error, not a flaw in this fix. The cascading-recreate fix above closes
+      that scenario entirely now, so it no longer applies in practice.
