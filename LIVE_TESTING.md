@@ -212,15 +212,25 @@ every real bug in this codebase.
       recreated `netns-target` alone (new id), then recreated `netns-dep` alone in the next run —
       `create()` succeeded (Docker doesn't validate `container:<id>` targets at create time either)
       but `start()` failed with `"joining network namespace of container: No such container: <dead
-      id>"`. The existing rollback correctly renamed `netns-dep` back with no orphaned state, but
-      (same as the `stop_timeout` case above) left it stopped rather than restarted, so the service
-      stayed down until manual intervention — the underlying condition doesn't change on retry,
-      so the *next* automatic poll would fail identically forever. A real fix likely means treating
+      id>"`. The existing rollback correctly renamed `netns-dep` back with no orphaned state, and
+      (see the now-fixed rollback-restart item below) even a rollback that also tries to restart
+      the old container can't succeed here, since the old container's *own* stored `NetworkMode`
+      references the same dead target id — so the service stays down until manual intervention
+      either way, and the underlying condition doesn't change on retry, so the *next* automatic
+      poll would fail identically forever. A real fix likely means treating
       a dependent-via-network_mode as forcibly stale whenever its target updates (cascading beyond
       today's stop/start-ordering-only relationship), which is a real design change, not a
       quick patch — flagging for a decision rather than fixing unprompted.
-- [ ] Related, more general observation (not specific to the above): whenever `recreate()`'s
-      rollback fires for *any* reason, the old container is correctly renamed back but is left
-      **stopped**, not restarted — confirmed in both the `stop_timeout` bug above and the
-      `container:<id>` gap above. Might be worth restarting it as part of the rollback so a failed
-      update doesn't also mean unplanned downtime until the next successful poll or manual fix.
+- [x] Related, more general issue (not specific to the above): whenever `recreate()`'s rollback
+      fired for *any* reason, the old container was correctly renamed back but left **stopped**,
+      not restarted — first noticed in both the `stop_timeout` bug and the `container:<id>` gap
+      above. Fixed in `docker/client.py`'s `recreate()`: the rollback path now also calls
+      `start()` on the renamed-back container (best-effort — a failure there is logged but doesn't
+      mask the original exception). Confirmed live 2026-07-15 with a clean create()-time failure
+      (recreate onto a nonexistent image id) unrelated to the network-mode gap: same container id,
+      same name, `status=running` afterward — a failed update no longer means unplanned downtime
+      on top of the update failure itself. Re-tried against the `container:<id>` cross-run
+      scenario specifically: the restart attempt itself failed there too, for the *same*
+      underlying reason (the old container's own stored `NetworkMode` also references the dead
+      target id) — expected, and correctly logged without masking the original error, not a flaw
+      in this fix. That scenario remains open, see below.

@@ -155,6 +155,15 @@ class DockerPyClient:
         old container had already been removed, permanently losing it —
         not a retryable failure like a create()-time rejection, an
         unrecoverable one.
+
+        On rollback, the old container is also restarted, not just renamed
+        back — it was stopped by the caller specifically to make way for a
+        replacement that didn't pan out, so "restore the pre-update state"
+        means running, not merely present. Caught live: an earlier version
+        left it renamed-back but stopped, meaning a failed update was also
+        unplanned downtime until the next successful poll or manual
+        intervention, on top of whatever the update failure itself already
+        cost.
         """
         spec = build_create_kwargs(container, new_image_id)
         temp_name = f"{container.name}-lookout-old"
@@ -191,6 +200,12 @@ class DockerPyClient:
                         container.name,
                     )
             self.rename(container, container.name)
+            try:
+                self._client.containers.get(container.id).start()
+            except Exception:
+                logger.exception(
+                    "failed to restart %s after rolling back a failed recreate", container.name
+                )
             raise
 
         self._client.containers.get(container.id).remove()
