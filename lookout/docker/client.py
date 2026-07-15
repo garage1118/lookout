@@ -7,6 +7,7 @@ import docker as docker_sdk
 
 from lookout.docker.container import Container
 from lookout.docker.recreate import build_create_kwargs
+from lookout.registry.auth import RegistryAuth
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def _strip_tag(image_name: str) -> str:
 
 class DockerClient(Protocol):
     def list_containers(self) -> list[Container]: ...
-    def pull_image(self, image: str) -> str: ...
+    def pull_image(self, image: str, auth: RegistryAuth | None = None) -> str: ...
     def get_image_id(self, image_name: str) -> str: ...
     def find_local_image_id(self, image_name: str, digest: str) -> str | None: ...
     def stop(self, container: Container, timeout: int) -> None: ...
@@ -143,8 +144,20 @@ class DockerPyClient:
             return {}
         return dict(config) if config else {}
 
-    def pull_image(self, image: str) -> str:
-        pulled = self._client.images.pull(image)
+    def pull_image(self, image: str, auth: RegistryAuth | None = None) -> str:
+        """`auth` is the same credential the registry digest check just
+        resolved for this image (config.json, or the LOOKOUT_REGISTRY_*
+        fallback) -- without forwarding it here, docker-py falls back to
+        whatever `config.json` lookout's own container happens to have (often
+        none at all, e.g. a Portainer-style deployment using only the
+        env-var fallback), so the digest check would authenticate correctly
+        while the pull itself 401s anonymously."""
+        auth_config = (
+            {"username": auth.username, "password": auth.password or ""}
+            if auth and auth.username
+            else None
+        )
+        pulled = self._client.images.pull(image, auth_config=auth_config)
         return str(pulled.id)
 
     def get_image_id(self, image_name: str) -> str:

@@ -350,3 +350,19 @@ every real bug in this codebase.
       transient failure turning into a permanent, invisible outage. After moving the pull ahead of
       the stop in `run()`, the identical scenario now leaves the container `running` throughout and
       still visible to the next poll, correctly recorded in `session.failed`.
+
+- [x] Resolved registry auth is forwarded from the digest check into the actual pull
+      (`docker/client.py` `pull_image`, `core/updater.run`) — partially confirmed live 2026-07-15.
+      Confirmed against a real Docker daemon and Docker Hub: `DockerPyClient.pull_image()` with
+      `auth=None` pulls `alpine:3.19` anonymously and succeeds; the identical call with a
+      deliberately bogus `RegistryAuth` gets a real `401 Unauthorized` straight from the daemon
+      (`"authentication required - incorrect username or password"`) — proving `auth_config` is
+      actually forwarded to and enforced by the daemon, not just accepted and ignored. **Not yet
+      confirmed**: the specific failure mode the fix targets (a private registry with *no*
+      `config.json` entry at all, reachable only via the `LOOKOUT_REGISTRY_*` env-var fallback,
+      where the digest check used to authenticate correctly while the pull silently went anonymous
+      and 401'd) — that needs a private registry with real credentials available to test against,
+      which wasn't available in this session. Worth a dedicated live run before 1.0 if such a
+      registry becomes available (e.g. re-run the `registry.3digital.com` scenario from the
+      private-registry-auth entry above, but with `config.json` moved aside so only the env-var
+      fallback can supply credentials, through a full stale → pull → recreate cycle).

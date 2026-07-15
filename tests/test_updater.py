@@ -6,6 +6,7 @@ from lookout.config import Settings
 from lookout.core.lifecycle import POST_UPDATE_LABEL
 from lookout.core.updater import run, stop_order
 from lookout.docker.container import DEPENDS_ON_LABEL, MONITOR_ONLY_LABEL, Container
+from lookout.registry.auth import RegistryAuth
 
 
 def make_container(
@@ -45,13 +46,15 @@ class FakeDockerClient:
         self.removed_images: list[str] = []
         self.found_image_id: str | None = None
         self.local_image_id = "sha256:local"
+        self.pull_auth: dict[str, RegistryAuth | None] = {}
 
     def list_containers(self) -> list[Container]:
         return list(self._containers)
 
-    def pull_image(self, image: str) -> str:
+    def pull_image(self, image: str, auth: RegistryAuth | None = None) -> str:
         if image in self.pull_fail:
             raise RuntimeError(f"pull failed: {image}")
+        self.pull_auth[image] = auth
         self.calls.append(f"pull:{image}")
         return "sha256:pulled"
 
@@ -481,6 +484,35 @@ def test_run_warns_when_stale_targets_netns_dependent_is_filtered_out(caplog: An
     assert [c.name for c in session.stale] == ["web"]
     assert "sidecar" in caplog.text
     assert "web" in caplog.text
+
+
+def test_run_passes_resolved_auth_through_to_pull_image() -> None:
+    # Regression test: the digest check and the pull used to resolve
+    # credentials completely independently -- the digest check got them, the
+    # pull never did, so a container relying solely on the
+    # LOOKOUT_REGISTRY_* env-var fallback (no config.json at all, e.g. a
+    # Portainer-style deployment) would authenticate correctly against the
+    # registry for staleness but then pull anonymously and 401.
+    container = make_container(
+        "web", image_name="registry.example.com/myapp:latest", repo_digests=[]
+    )
+    docker_client = FakeDockerClient([container])
+    registry_client = FakeRegistryClient({"registry.example.com/myapp:latest": "sha256:new"})
+
+    run(
+        docker_client,
+        registry_client,
+        settings(
+            registry_host="registry.example.com",
+            registry_username="user",
+            registry_password="pass",
+        ),
+    )
+
+    auth = docker_client.pull_auth["registry.example.com/myapp:latest"]
+    assert auth is not None
+    assert auth.username == "user"
+    assert auth.password == "pass"
 
 
 def test_run_unwraps_registry_password_secret_for_fallback_auth() -> None:

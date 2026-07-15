@@ -55,6 +55,13 @@ def run(
     # many images on it are checked, instead of once per image.
     registry_auth_cache: AuthCache = {}
 
+    # Stashed per container so the later pull step (see below) authenticates
+    # with the same credentials the digest check just resolved, instead of
+    # silently pulling anonymously and 401ing on a private image -- caught by
+    # inspection, not live: the digest check and the pull were resolving auth
+    # completely independently, and only the digest check ever got it.
+    resolved_auth: dict[str, RegistryAuth | None] = {}
+
     for container in targets:
         if is_pinned(container.image_name):
             session.skipped.append((container, "pinned"))
@@ -65,6 +72,7 @@ def run(
                 fallback=fallback_auth,
                 fallback_registry=settings.registry_host,
             )
+            resolved_auth[container.name] = auth
             latest_digest = registry_client.get_latest_digest(
                 container.image_name, auth, cache=registry_auth_cache
             )
@@ -103,7 +111,9 @@ def run(
             new_image_ids[container.name] = (
                 docker_client.get_image_id(container.image_name)
                 if no_pull
-                else docker_client.pull_image(container.image_name)
+                else docker_client.pull_image(
+                    container.image_name, resolved_auth.get(container.name)
+                )
             )
         except Exception as exc:
             logger.exception("failed to pull a new image for %s", container.name)
