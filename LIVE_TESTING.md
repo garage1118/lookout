@@ -121,30 +121,106 @@ every real bug in this codebase.
         live check closes the gap of whether the real client can actually raise there at all,
         which the fake could only assume.
 
-## Not yet confirmed live
+- [x] `--include` / `--exclude` name filtering (`core/filter.apply`) — confirmed live 2026-07-14
+      against three real containers (`web`, `api`, `worker`): `--include web,api` left `worker`
+      completely untouched (uptime unchanged) while `web`/`api` were processed; `--exclude worker`
+      produced the identical result from the other direction. No bugs found.
+- [x] `--monitor-only` (`core/updater.run`) — confirmed live 2026-07-14: a genuinely stale
+      container was reported in `stale` but its container id and `State.StartedAt` were byte-for-byte
+      unchanged after the run (no stop/recreate/restart call at all, not even a restart-in-place).
+      No bugs found.
+- [x] Dependency-ordered stop/start via the `depends-on` label (`stop_order`,
+      `core/updater.run`) — confirmed live 2026-07-14 against two real containers (`db`, with `app`
+      labelled `io.lookout.depends-on=db`), captured via real `docker events` during the run:
+      `die app` fired, then (after the full stop timeout) `die db` — dependent stops first, exactly
+      matching `stop_order()`. `start db` then `start app` followed — dependency starts first,
+      exactly matching `reversed(stop_order())`. No bugs found.
+- [x] Explicit tmpfs-mount skip in recreate (`docker/recreate.py` `_build_mounts`) — confirmed live
+      2026-07-14. Note this needed disambiguating two distinct Docker features that both get called
+      "tmpfs": legacy `--tmpfs /path:opts` (populates `HostConfig.Tmpfs` directly, no entry in the
+      `Mounts` array) versus modern `--mount type=tmpfs,...` (populates the `Mounts` array with
+      `Type: "tmpfs"`). A container with both was recreated: the legacy `--tmpfs` mount was
+      correctly carried over (via the separate `host_config.get("Tmpfs")` handling added in the
+      same pass, not `_build_mounts`), while the modern `--mount type=tmpfs` entry was correctly
+      dropped — `_build_mounts`'s `_SUPPORTED_MOUNT_TYPES` skip is specifically about the latter.
+      No bugs found once the two were tested separately.
+- [x] Ulimits/sysctls/devices/dns/extra_hosts carried over on recreate (`docker/recreate.py`) —
+      confirmed live 2026-07-14 against a real container started with `--ulimit nofile=2048:4096`,
+      `--sysctl net.ipv4.ip_unprivileged_port_start=1023`, `--dns 9.9.9.9`,
+      `--add-host myhost:10.1.2.3`, and `--device /dev/null:/dev/xnull` — all five survived a real
+      recreate onto a new image unchanged. No bugs found.
+- [x] Resource limits (`mem_limit`, `nano_cpus`, `memswap_limit`, `pids_limit`) carried over on
+      recreate (`docker/recreate.py`) — confirmed live 2026-07-14 against a container started with
+      `--memory 128m --memory-swap 256m --cpus 0.5 --pids-limit 128`; all four survived a real
+      recreate unchanged. No bugs found. (`cpu_shares` specifically wasn't separately exercised —
+      same plain-int passthrough pattern as the others, and `--cpus`/`nano_cpus` is the modern
+      equivalent most real setups would actually use.)
+- [x] `log_config`/`security_opt`/`group_add`/`read_only`/`init`/`stop_signal`/`stop_timeout`/
+      `pid_mode`/`ipc_mode` carried over on recreate (`docker/recreate.py`, `docker/client.py`) —
+      confirmed live 2026-07-14 against a container started with `--log-opt`,
+      `--security-opt no-new-privileges:true`, `--group-add 1001`, `--read-only`, `--init`,
+      `--stop-signal SIGUSR1`, `--stop-timeout 25`, `--pid host`, `--ipc shareable`. **Caught a
+      real bug**: `stop_timeout` is accepted by the low-level `create_container()` API but is
+      entirely unsupported by docker-py's high-level `containers.create()`/`.run()` (not in either
+      of `RUN_CREATE_KWARGS`/`RUN_HOST_CONFIG_KWARGS` — confirmed by reading docker-py's own
+      source), so any container recreated with a `--stop-timeout` in its original config raised a
+      bare `TypeError: run() got an unexpected keyword argument 'stop_timeout'` before ever
+      reaching the daemon — a 100%-reproducible failure, not an edge case, for any such container.
+      The `recreate()` rollback correctly renamed the old container back with zero data loss, but
+      it was left stopped (not restarted) — see the open item below. Fixed in
+      `DockerPyClient._create()` by extending the existing low-level-API routing (previously only
+      taken for the SELinux legacy-`Binds` case) to also trigger whenever `stop_timeout` is
+      present; confirmed live after the fix that recreate succeeds and every one of the nine
+      fields above survives correctly onto the new container.
+- [x] Private-registry credential reading from `~/.docker/config.json` (`registry/auth.py`) —
+      confirmed live 2026-07-14 with a real read-only manifest HEAD against
+      `registry.3digital.com` (the same registry/scenario as the original `401` bug this project
+      exists to avoid): `resolve_auth()` correctly read real Basic-auth credentials out of the
+      host's actual `config.json`, and `RegistryClient.get_latest_digest()` got back a genuine
+      `200` and digest instead of `401`. No bugs found. (Note: this check briefly printed the
+      resolved password to a terminal in this session — that credential was flagged to the
+      operator as compromised and should be rotated; not a code issue, a testing-hygiene mistake.)
+- [x] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — partially
+      confirmed live 2026-07-14. Verified the best-effort exception handling is robust: on this
+      host, a retagged-but-still-container-referenced image becomes fully untracked by Docker
+      (`docker image inspect` returns `404`, not the classically-expected "409 image in use")
+      faster than expected — apparently a trait of this host's containerd-backed image store, not
+      a lookout issue. `remove_image()` hit that `404` and `_cleanup_images` correctly logged
+      `"skipping cleanup of ... (still in use?)"` and moved on without crashing the run, which is
+      the documented contract. Could **not** directly observe the straightforward happy path
+      (image has zero other references, `remove_image()` succeeds) on this host, since by the time
+      cleanup runs the old image had already vanished for the reason above regardless of what
+      lookout does. Worth a re-check on a host with classic overlay2 storage if that matters before
+      1.0.
 
-- [ ] Private-registry credential reading from `~/.docker/config.json` (`registry/auth.py`)
-- [ ] Image cleanup after update, `--cleanup` (`core/updater._cleanup_images`) — documented as
-      best-effort/unverified
-- [ ] Dependency-ordered stop/start (`stop_order`, container links / `depends-on` label)
-- [ ] `--monitor-only`
-- [ ] `--include` / `--exclude` name filtering
+## Known gap found during this session, not yet fixed
 
-## New since the 2026-07-14 code review pass — need first-time live verification
-
-- [ ] Explicit tmpfs-mount skip in recreate (`docker/recreate.py` `_build_mounts`) — confirm a
-      container with a tmpfs mount recreates cleanly without it
-- [ ] Ulimits/sysctls/devices/dns/extra_hosts/tmpfs carried over on recreate (`docker/recreate.py`)
-      — needs a container actually using each of these to confirm the new create-kwargs are
-      accepted by a live daemon
-- [ ] `container:<id>` NetworkMode resolved to `container:<name>` at listing time
-      (`docker/client.py` `_resolve_network_mode_container_ref`) — confirm against a container
-      whose network mode is `container:<other-container>`, and confirm the target surviving its
-      own recreation doesn't break this one
-- [ ] Resource limits (`mem_limit`, `nano_cpus`, `cpu_shares`, `memswap_limit`, `pids_limit`)
-      carried over on recreate (`docker/recreate.py`) — confirm against a container started with
-      `--memory`/`--cpus`/`--pids-limit` set
-- [ ] `log_config`/`security_opt`/`group_add`/`read_only`/`shm_size`/`init`/`stop_signal`/
-      `stop_timeout`/`pid_mode`/`ipc_mode` carried over on recreate (`docker/recreate.py`) —
-      confirm against a container started with `--log-opt`, `--security-opt`, `--read-only`,
-      `--init`, `--stop-signal`, `--pid=host`, and `--ipc=shareable` set
+- [ ] `container:<id>` NetworkMode resolution (`docker/client.py`
+      `_resolve_network_mode_container_ref`) only survives the target being recreated **within
+      the same poll** as the dependent. Confirmed live 2026-07-14 with two containers
+      (`netns-target`, `netns-dep` on `--network container:netns-target`): resolving id→name at
+      `list_containers()` time works correctly (verified directly), and a same-run recreate of
+      both together works too (dependency-first ordering means the dependent's create() call uses
+      the *current* target id since `list_containers()` snapshots before either container is
+      touched). But Docker itself always re-resolves and re-stores a `container:<name>` reference
+      as a concrete id at `create()` time — it never persists the name — so if the target gets
+      recreated in one poll (new id) while the dependent isn't touched until a *later* poll, the
+      dependent's `HostConfig.NetworkMode` (unchanged since Docker doesn't update it on a running
+      container) still points at the target's now-**dead** id, and by then there is no longer any
+      container object for `_resolve_network_mode_container_ref` to look up at all — the
+      id→name mapping is unrecoverable once the old id is actually gone. Reproduced exactly this:
+      recreated `netns-target` alone (new id), then recreated `netns-dep` alone in the next run —
+      `create()` succeeded (Docker doesn't validate `container:<id>` targets at create time either)
+      but `start()` failed with `"joining network namespace of container: No such container: <dead
+      id>"`. The existing rollback correctly renamed `netns-dep` back with no orphaned state, but
+      (same as the `stop_timeout` case above) left it stopped rather than restarted, so the service
+      stayed down until manual intervention — the underlying condition doesn't change on retry,
+      so the *next* automatic poll would fail identically forever. A real fix likely means treating
+      a dependent-via-network_mode as forcibly stale whenever its target updates (cascading beyond
+      today's stop/start-ordering-only relationship), which is a real design change, not a
+      quick patch — flagging for a decision rather than fixing unprompted.
+- [ ] Related, more general observation (not specific to the above): whenever `recreate()`'s
+      rollback fires for *any* reason, the old container is correctly renamed back but is left
+      **stopped**, not restarted — confirmed in both the `stop_timeout` bug above and the
+      `container:<id>` gap above. Might be worth restarting it as part of the rollback so a failed
+      update doesn't also mean unplanned downtime until the next successful poll or manual fix.

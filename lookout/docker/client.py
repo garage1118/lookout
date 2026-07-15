@@ -198,8 +198,9 @@ class DockerPyClient:
         return Container.from_inspect(self._client.containers.get(new_container.id).attrs)
 
     def _create(self, create_kwargs: dict[str, Any]) -> Any:
-        """containers.create(), except for the "volumes" (legacy Binds
-        string) case, which needs the low-level API instead.
+        """containers.create(), except for two cases that need the
+        low-level API instead: "volumes" (legacy Binds strings) and
+        "stop_timeout".
 
         docker-py's high-level containers.create(volumes=[...]) doesn't
         just set HostConfig.Binds from the strings — it also independently
@@ -214,15 +215,29 @@ class DockerPyClient:
         The low-level HostConfig(binds=[...]) path passes a list of bind
         strings straight through with no such parsing, so building the
         HostConfig ourselves via the low-level API avoids the bug
-        entirely. Only taken when there's actually a relabeled mount to
-        carry over; every other recreate still goes through the plain
-        high-level call above.
+        entirely.
+
+        Separately, "stop_timeout" isn't accepted by containers.create() /
+        .run() at all — docker-py's RUN_CREATE_KWARGS/RUN_HOST_CONFIG_KWARGS
+        allowlists it out entirely (confirmed by reading docker-py's own
+        source; it's a real gap, not a version quirk), even though the
+        low-level create_container() has always accepted it directly.
+        Caught live: any container recreated with a `--stop-timeout`
+        carried over from its old config raised a bare TypeError before
+        ever reaching the daemon. create_container() takes it as a plain
+        kwarg (not part of HostConfig at all), so it's left in `kwargs`
+        below rather than routed into host_config_kwargs.
+
+        Both cases fall through to the plain high-level call when neither
+        applies — this low-level path only runs when actually needed.
         """
-        if "volumes" not in create_kwargs:
+        if "volumes" not in create_kwargs and "stop_timeout" not in create_kwargs:
             return self._client.containers.create(**create_kwargs)
 
         kwargs = dict(create_kwargs)
-        host_config_kwargs: dict[str, Any] = {"binds": kwargs.pop("volumes")}
+        host_config_kwargs: dict[str, Any] = {}
+        if "volumes" in kwargs:
+            host_config_kwargs["binds"] = kwargs.pop("volumes")
         for key in list(kwargs):
             if key in _HOST_CONFIG_KWARGS:
                 host_config_kwargs[key] = kwargs.pop(key)
