@@ -7,3 +7,4 @@ watchtower/
 .env
 site/
 dist/
+CODE_REVIEW.md
