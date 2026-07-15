@@ -59,11 +59,17 @@ def run(
             latest_digest = registry_client.get_latest_digest(
                 container.image_name, auth, cache=registry_auth_cache
             )
+            stale = _is_stale(docker_client, container, latest_digest)
         except Exception:
+            # Covers both a registry-side failure (above) and a Docker-side
+            # one (_is_stale's find_local_image_id fallback) -- either way
+            # this container's staleness couldn't be determined, and a
+            # transient Docker API hiccup on one container shouldn't abort
+            # the whole run and skip every container after it.
             logger.exception("failed to check %s for updates", container.name)
             session.skipped.append((container, "check failed"))
             continue
-        if _is_stale(docker_client, container, latest_digest):
+        if stale:
             session.stale.append(container)
 
     _cascade_network_mode_dependents(targets, session, settings)

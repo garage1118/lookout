@@ -38,6 +38,7 @@ class FakeDockerClient:
         self.calls: list[str] = []
         self.stop_fail: set[str] = set()
         self.exec_fail: set[str] = set()
+        self.find_local_image_id_fail: set[str] = set()
         self.removed_images: list[str] = []
         self.found_image_id: str | None = None
         self.local_image_id = "sha256:local"
@@ -54,6 +55,8 @@ class FakeDockerClient:
         return self.local_image_id
 
     def find_local_image_id(self, image_name: str, digest: str) -> str | None:
+        if image_name in self.find_local_image_id_fail:
+            raise RuntimeError(f"docker API error: {image_name}")
         self.calls.append(f"find_local_image_id:{image_name}:{digest}")
         return self.found_image_id
 
@@ -357,6 +360,29 @@ def test_run_records_registry_errors_as_skipped() -> None:
 
     assert [(c.name, reason) for c, reason in session.skipped] == [("web", "check failed")]
     assert session.stale == []
+
+
+def test_run_records_local_docker_check_errors_as_skipped_without_aborting_the_run() -> None:
+    # Regression test: _is_stale()'s find_local_image_id fallback used to be
+    # called outside the per-container try/except that already covers a
+    # registry-side failure -- a transient Docker API error on one
+    # container's staleness check would propagate out of run() entirely and
+    # silently skip every container after it (and the run's own
+    # notification). It must be caught and recorded the same way a registry
+    # failure already is, and the next container must still be processed.
+    web = make_container("web", repo_digests=[])  # orphaned -> triggers the fallback
+    api = make_container("api", image_name="api:latest", repo_digests=["api@sha256:old"])
+    docker_client = FakeDockerClient([web, api])
+    docker_client.find_local_image_id_fail = {"myapp:latest"}
+    registry_client = FakeRegistryClient(
+        {"myapp:latest": "sha256:new", "api:latest": "sha256:new"}
+    )
+
+    session = run(docker_client, registry_client, settings())
+
+    assert [(c.name, reason) for c, reason in session.skipped] == [("web", "check failed")]
+    assert [c.name for c in session.stale] == ["api"]
+    assert [c.name for c in session.updated] == ["api"]
 
 
 def test_run_reports_monitor_only_stale_containers_without_updating() -> None:

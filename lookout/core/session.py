@@ -13,8 +13,9 @@ class Session:
     failed: list[tuple[Container, Exception]] = field(default_factory=list)
     stale: list[Container] = field(default_factory=list)
     # reason is "pinned" (pinned-by-digest, permanent/expected) or
-    # "check failed" (registry check errored, transient/actionable) — see
-    # the "Skipped" section in summary().
+    # "check failed" (the registry lookup or the local Docker staleness
+    # fallback errored, transient/actionable) — see the "Skipped" section in
+    # summary().
     skipped: list[tuple[Container, str]] = field(default_factory=list)
 
     def has_activity(self) -> bool:
