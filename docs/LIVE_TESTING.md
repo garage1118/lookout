@@ -250,50 +250,72 @@ every real bug in this codebase.
       masking the original error, not a flaw in this fix. The cascading-recreate fix above closes
       that scenario entirely now, so it no longer applies in practice.
 
-## Not yet confirmed
+## Findings from the 2026-07-15 code review, confirmed live
 
-- [ ] Old-image config subtraction for `Cmd`/`Entrypoint`/`Env`/`Labels`/`WorkingDir`/`User`/
-      `StopSignal`/`Healthcheck` (`docker/recreate.py` `build_create_kwargs`,
-      `docker/client.py` `DockerPyClient._image_config`) — added during code review (not caught
-      live). Unit-tested against hand-built Config dicts, but the real-world case this targets
-      (recreating onto an image whose own `CMD`/`ENV`/`HEALTHCHECK` default genuinely changed from
-      the old image, e.g. two different tags of a real image, not a hand-crafted fixture) hasn't
-      been exercised against a live daemon yet. Needs: a container started from image A, image B
-      published under the same tag with a different default `CMD` and `HEALTHCHECK`, confirm the
-      recreated container picks up B's defaults rather than A's.
-- [ ] Legacy `--link` carried over on recreate (`docker/recreate.py` `_build_links`,
-      `docker/client.py` `_HOST_CONFIG_KWARGS`) — added during code review (not caught live).
-      Unit-tested against a hand-built `HostConfig.Links` value only. Needs: two containers started
-      with `docker run --link db:database ... web`, update `web` (or `db`, forcing a cascade via
-      `stop_order`), confirm `web`'s `/etc/hosts` alias and `DATABASE_*` env vars still resolve
-      after the recreate.
-- [ ] `docker network connect`-added networks survive recreate on a bridge-mode container
-      (`docker/recreate.py` `_build_networks`) — added during code review (not caught live).
-      Unit-tested against a hand-built `NetworkSettings.Networks` value only. Needs: a plain
-      `docker run` container (default bridge), then `docker network connect mynet <container>`,
-      then an update — confirm the recreated container is on both the default bridge and `mynet`
-      afterward, not just the bridge.
-- [ ] Newly-mapped `HostConfig` fields carried over on recreate (`docker/recreate.py`
-      `build_create_kwargs`) — `DeviceRequests` (`--gpus`), `Runtime`, `DnsSearch`/`DnsOptions`,
-      `VolumesFrom`, `UsernsMode`/`UTSMode`, `CgroupParent`, `Isolation`, CPU pinning, `BlkioWeight`,
-      `OomScoreAdj`/`OomKillDisable`, `MemoryReservation`/`MemorySwappiness`, and
-      `--mount type=tmpfs`. Added during code review (not caught live). Unit-tested against
-      hand-built HostConfig dicts only — `DeviceRequests` and `--mount type=tmpfs` in particular
-      need a real daemon (a `--gpus`-requesting container recreated onto a host with a GPU; a
-      `--mount type=tmpfs,tmpfs-size=64m` container recreated and its tmpfs mount + size confirmed
-      afterward) since their exact `docker inspect` shape was inferred from Docker's API docs, not
-      captured from a live container.
-- [ ] Stale `<name>-lookout-old` cleanup before rename (`docker/client.py`
-      `_remove_stale_temp_container`) — added during code review (not caught live). No automated
-      test at all (would need to simulate a crash mid-recreate, i.e. a real orphaned container of
-      that name already present). Needs: manually create `<container>-lookout-old` as a stopped
-      container standing in for a crash-orphan, then trigger a real update of `<container>` and
-      confirm recreate() succeeds instead of hitting a 409 name conflict on the rename, and that
-      the orphan is gone afterward.
-- [ ] Rollback rename-back failure no longer masks the original exception (`docker/client.py`
-      `recreate()`) — added during code review (not caught live). No automated test (would need to
-      simulate a rename() failure specifically during rollback, distinct from the already-covered
-      create()/start()-time failures). Needs: force a rollback (e.g. recreate onto a bogus image
-      id) while also making the rename-back step fail (e.g. a name conflict planted at that exact
-      moment) and confirm the original error is still what's logged/raised, and that `start()` is
-      still attempted on the old container despite the rename-back failure.
+- [x] Old-image config subtraction for `Cmd`/`Env`/`WorkingDir`/`Healthcheck` (`docker/recreate.py`
+      `build_create_kwargs`, `docker/client.py` `DockerPyClient._image_config`) — confirmed live
+      2026-07-15: built two local images under different tags (v1: `CMD ["sleep","3600"]`,
+      `ENV FOO=v1-default`, `WORKDIR /v1-workdir`, 5s-interval healthcheck; v2: `CMD
+      ["sleep","7200"]`, `ENV FOO=v2-default`, `WORKDIR /v2-workdir`, 9s-interval healthcheck), ran
+      a container from v1 with an explicit `-e BAR=user-set` on top, stopped it, and called
+      `DockerPyClient.recreate()` directly onto v2's image id. The recreated container picked up
+      v2's `CMD`, `FOO`, `WORKDIR`, and healthcheck interval exactly (not v1's), while `BAR` (the
+      genuine user override) survived. No bugs found. Incidentally also confirmed the finding-8/
+      finding-6 best-effort final-removal fix live on the first (invalid) attempt: forgetting to
+      stop the container before calling `recreate()` directly caused the final old-container
+      `remove()` to 409 (container still running) — the exception was caught, logged, and did not
+      fail the overall recreate, exactly as designed.
+- [x] Legacy `--link` carried over on recreate (`docker/recreate.py` `_build_links`,
+      `docker/client.py` `_HOST_CONFIG_KWARGS`) — confirmed live 2026-07-15: `db-test` and
+      `web-test --link db-test:database`, confirmed `web-test`'s `/etc/hosts` had a `database`
+      alias pointing at `db-test`'s IP before the change, stopped `web-test` and called
+      `recreate()` directly. `HostConfig.Links` (`["/db-test:/web-test/database"]`) and the
+      `/etc/hosts` alias were both identical after recreate. No bugs found.
+- [x] `docker network connect`-added networks survive recreate on a bridge-mode container
+      (`docker/recreate.py` `_build_networks`) — confirmed live 2026-07-15: a plain `docker run`
+      container (default bridge, `NetworkMode: "bridge"`), then `docker network connect --alias
+      connectalias lookout-connect-test <container>`, confirmed `NetworkSettings.Networks` had both
+      `bridge` and `lookout-connect-test` before recreate. After `recreate()`, the new container was
+      attached to both networks with the alias preserved. No bugs found.
+- [x] Newly-mapped `HostConfig` fields carried over on recreate (`docker/recreate.py`
+      `build_create_kwargs`) — confirmed live 2026-07-15 against a single container started with
+      `--volumes-from`, `--uts host`, `--cgroup-parent lookouttest.slice`, `--dns-search`,
+      `--dns-option`, `--cpuset-cpus`, `--cpuset-mems`, `--cpu-quota`, `--cpu-period`,
+      `--blkio-weight`, `--oom-score-adj`, `--memory-reservation`, and
+      `--mount type=tmpfs,tmpfs-size=...,tmpfs-mode=...`, plus `--userns host` tested separately.
+      All eleven fields, and the tmpfs mount itself, survived recreate unchanged. Two things
+      couldn't be verified on this host: `MemorySwappiness` and `OomKillDisable` are silently
+      discarded by Docker itself at container-creation time on this cgroup v2 host ("Your kernel
+      does not support ... discarded") — `HostConfig` shows them as unset regardless of what's
+      requested, so there was no non-default value to prove survives a recreate; the code path is
+      identical to the other resource-limit fields, which did pass. Also confirmed a real, useful
+      data point: `TmpfsOptions` (size/mode) is genuinely **absent** from this daemon's runtime
+      `Mounts` summary even though `tmpfs-size`/`tmpfs-mode` were set at creation — validating that
+      `_build_mounts()`'s defensive `m.get("TmpfsOptions") or {}` (rather than assuming it's always
+      present) was necessary, not just theoretical caution; the mount itself (type, target path)
+      still survives recreate correctly, just without the size/mode reproduced. Still unconfirmed,
+      genuinely untestable in this environment: `DeviceRequests`/`--gpus` (no GPU on this host —
+      `docker run --gpus` fails outright with no nvidia runtime installed), `Runtime` (no
+      alternate runtime registered with this daemon, and registering one requires editing
+      `/etc/docker/daemon.json` and restarting the daemon, which needs privileged access not
+      available in this environment), and `Isolation` (Windows-only, not applicable to a Linux
+      daemon at all).
+- [x] Stale `<name>-lookout-old` cleanup before rename (`docker/client.py`
+      `_remove_stale_temp_container`) — confirmed live 2026-07-15: manually created a stopped
+      `origtest-lookout-old` container to stand in for a crash-orphan, then called `recreate()` on
+      the real (stopped) `origtest`. It succeeded without a name conflict, and the fake orphan was
+      gone afterward. Negative control in the same session, without the sweep: renaming a running
+      container directly into an already-occupied `<name>-lookout-old` name reproduces the exact
+      409 ("Error when allocating new name: Conflict... already in use") this fix exists to avoid.
+      No bugs found in the fix.
+- [x] Rollback rename-back failure no longer masks the original exception (`docker/client.py`
+      `recreate()`) — confirmed live 2026-07-15 via targeted failure injection: recreated a real,
+      stopped container onto a bogus image id (forcing a real `ImageNotFound` at the `create()`
+      step) while `DockerPyClient.rename()` was monkeypatched to let the first call (temp rename)
+      through to the real daemon but raise on the second call (the rollback rename-back) — every
+      other step (create, the rename-back attempt itself being routed through the real method
+      first, start) ran against the real daemon. Confirmed: the exception that actually propagated
+      out of `recreate()` was the original `ImageNotFound`, not the injected rename-back failure;
+      the injected failure was logged separately; and the old container was still successfully
+      `start()`-ed (confirmed running via a real inspect) despite still being named
+      `rollbacktest-lookout-old` since the rename-back itself never completed. No bugs found.
