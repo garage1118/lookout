@@ -25,8 +25,7 @@ A non-zero exit code is logged as a warning but does **not** stop the update fro
 ## Not implemented
 
 - **Pre-check / post-check hooks.** Watchtower runs these around the staleness *check* itself
-  (not just the update). lookout reserves the label names
-  (`io.lookout.lifecycle.pre-check` / `post-check`) but nothing currently invokes them.
+  (not just the update). lookout doesn't implement these at all.
 - **Per-hook timeouts.** Watchtower kills a hook after 60s by default (configurable per-label).
   lookout's hook execution has no timeout — a hanging hook command blocks that container's update
   indefinitely.

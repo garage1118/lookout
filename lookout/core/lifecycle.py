@@ -5,8 +5,6 @@ import logging
 from lookout.docker.client import DockerClient
 from lookout.docker.container import Container
 
-PRE_CHECK_LABEL = "io.lookout.lifecycle.pre-check"
-POST_CHECK_LABEL = "io.lookout.lifecycle.post-check"
 PRE_UPDATE_LABEL = "io.lookout.lifecycle.pre-update"
 POST_UPDATE_LABEL = "io.lookout.lifecycle.post-update"
 
