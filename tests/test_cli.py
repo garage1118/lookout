@@ -139,6 +139,45 @@ def test_notify_on_startup_calls_send_startup_once(monkeypatch: Any) -> None:
     assert len(startup_calls) == 1
 
 
+def test_run_once_succeeds_despite_notification_send_failure(monkeypatch: Any) -> None:
+    # Regression test: the update work (run_update) already completed by the
+    # time notifications are sent -- a bug in the notification-delivery
+    # library shouldn't turn an otherwise-successful --run-once pass into a
+    # nonzero exit.
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
+
+    def failing_send(session: Any, urls: Any, only_on_change: bool = False) -> None:
+        raise RuntimeError("notification backend exploded")
+
+    monkeypatch.setattr(cli_module, "send_notifications", failing_send)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_module.main, ["--run-once"])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_run_once_succeeds_despite_startup_notification_failure(monkeypatch: Any) -> None:
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    def failing_send_startup(urls: Any) -> None:
+        raise RuntimeError("notification backend exploded")
+
+    monkeypatch.setattr(cli_module, "send_startup", failing_send_startup)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_module.main, ["--run-once", "--notify-on-startup"])
+
+    assert result.exit_code == 0, result.output
+
+
 def test_notify_on_startup_not_called_when_flag_omitted(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)

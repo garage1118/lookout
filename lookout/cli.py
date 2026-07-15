@@ -119,7 +119,10 @@ def main(
     logger.info("lookout v%s started", __version__)
 
     if settings.notify_on_startup:
-        send_startup(settings.notification_urls)
+        try:
+            send_startup(settings.notification_urls)
+        except Exception:
+            logger.exception("failed to send startup notification")
 
     docker_client = DockerPyClient(docker_host=settings.docker_host)
     registry_client = RegistryClient()
@@ -127,7 +130,16 @@ def main(
     def job() -> None:
         session = run_update(docker_client, registry_client, settings)
         logger.info(session.summary())
-        send_notifications(session, settings.notification_urls, settings.notify_only_on_change)
+        try:
+            send_notifications(session, settings.notification_urls, settings.notify_only_on_change)
+        except Exception:
+            # The update work above already completed (successfully or not,
+            # and is already recorded in the log line above) -- a
+            # notification-delivery bug shouldn't turn a --run-once pass
+            # that otherwise succeeded into a nonzero exit, nor (in daemon
+            # mode) get misreported by run_forever's generic "run failed" as
+            # if the poll itself had failed.
+            logger.exception("failed to send run-summary notification")
 
     if run_once:
         job()
