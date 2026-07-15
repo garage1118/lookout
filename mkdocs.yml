@@ -46,5 +46,8 @@ nav:
   - Notifications: notifications.md
   - Limitations: limitations.md
 
+exclude_docs: |
+  LIVE_TESTING.md
+
 plugins:
   - search
