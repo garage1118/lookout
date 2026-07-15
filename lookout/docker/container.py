@@ -54,14 +54,33 @@ class Container:
         return self.labels.get(NO_PULL_LABEL, "false").lower() == "true"
 
     def links(self) -> list[str]:
-        """Names of containers this one depends on (legacy links + depends-on label)."""
+        """Names of containers this one depends on (legacy links, depends-on
+        label, and network_mode_target — a container sharing another's
+        network namespace can't start before that other container exists)."""
         names: set[str] = set()
         for link in (self.inspect.get("HostConfig") or {}).get("Links") or []:
             # "/other-container:/this-container/alias" -> "other-container"
             names.add(link.split(":", 1)[0].lstrip("/"))
         depends_on = self.labels.get(DEPENDS_ON_LABEL, "")
         names.update(name.strip() for name in depends_on.split(",") if name.strip())
+        network_target = self.network_mode_target()
+        if network_target:
+            names.add(network_target)
         return sorted(names)
+
+    def network_mode_target(self) -> str | None:
+        """Name of the container this one shares its network namespace with
+        (`--net=container:<name-or-id>`), or None if it isn't sharing
+        another container's namespace.
+
+        Relies on DockerPyClient._resolve_network_mode_container_ref having
+        already rewritten an id-based reference to a name at listing time —
+        this only sees a name here, never a raw id.
+        """
+        network_mode = (self.inspect.get("HostConfig") or {}).get("NetworkMode") or ""
+        if not network_mode.startswith("container:"):
+            return None
+        return network_mode.split(":", 1)[1]
 
     def has_digest(self, digest: str) -> bool:
         """True if `digest` is among this image's known RepoDigests.

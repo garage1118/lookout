@@ -66,6 +66,8 @@ def run(
         if _is_stale(docker_client, container, latest_digest):
             session.stale.append(container)
 
+    network_mode_forced = _cascade_network_mode_dependents(targets, session)
+
     to_update = [
         c for c in session.stale if not (settings.monitor_only or c.is_monitor_only())
     ]
@@ -89,7 +91,7 @@ def run(
                 if no_pull
                 else docker_client.pull_image(container.image_name)
             )
-            if new_image_id == container.image_id:
+            if new_image_id == container.image_id and container.name not in network_mode_forced:
                 # Nothing to actually update onto. Most commonly hit with
                 # --no-pull: staleness is judged against the registry digest,
                 # but the update path uses whatever image is cached locally
@@ -99,6 +101,9 @@ def run(
                 # poll forever. Restart it in place instead and leave it
                 # counted as stale-not-updated. Harmless safety net on the
                 # pull path too, where it should never trigger in practice.
+                # network_mode_forced containers skip this shortcut even
+                # though their own image is unchanged — see
+                # _cascade_network_mode_dependents.
                 docker_client.start(container)
                 continue
             new_container = docker_client.recreate(container, new_image_id)
@@ -133,6 +138,44 @@ def _is_stale(docker_client: DockerClient, container: Container, latest_digest: 
     # whether the *running* image is the one that actually has this digest.
     found_id = docker_client.find_local_image_id(container.image_name, latest_digest)
     return found_id is None or found_id != container.image_id
+
+
+def _cascade_network_mode_dependents(targets: list[Container], session: Session) -> set[str]:
+    """Force a real recreate (not just a same-image restart) for any
+    container sharing its network namespace with something already marked
+    stale this run, even though its own image is unchanged.
+
+    Docker resolves a `container:<name>` reference to a concrete id at
+    create() time and never updates the stored value again — so once a
+    network-mode target is recreated (new id) in one poll, a dependent left
+    untouched keeps referencing the target's now-dead id, and its own next
+    recreate fails at start() with "No such container", permanently (every
+    later poll hits the same dead reference). Recreating the dependent in
+    the *same* poll as its target sidesteps this entirely: Container.links()
+    (via network_mode_target()) already makes stop_order() recreate the
+    target first, and build_create_kwargs() re-resolves the dependent's
+    reference to a name while the target's old id still exists this run —
+    Docker then re-resolves that name to the target's *new* id at the
+    dependent's own create() time. Returns the set of container names
+    cascaded in, so core/updater.run's restart-vs-recreate shortcut can
+    skip them (their own image_id comparison would otherwise look
+    unchanged and just restart them in place, which does nothing to fix a
+    stale network_mode reference).
+    """
+    stale_names = {c.name for c in session.stale}
+    forced: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for container in targets:
+            if container.name in stale_names:
+                continue
+            if container.network_mode_target() in stale_names:
+                session.stale.append(container)
+                stale_names.add(container.name)
+                forced.add(container.name)
+                changed = True
+    return forced
 
 
 def stop_order(containers: list[Container]) -> list[Container]:

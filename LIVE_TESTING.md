@@ -193,34 +193,41 @@ every real bug in this codebase.
       lookout does. Worth a re-check on a host with classic overlay2 storage if that matters before
       1.0.
 
-## Known gap found during this session, not yet fixed
+## Known gap found during this session, fixed
 
-- [ ] `container:<id>` NetworkMode resolution (`docker/client.py`
-      `_resolve_network_mode_container_ref`) only survives the target being recreated **within
+- [x] `container:<id>` NetworkMode resolution (`docker/client.py`
+      `_resolve_network_mode_container_ref`) only survived the target being recreated **within
       the same poll** as the dependent. Confirmed live 2026-07-14 with two containers
       (`netns-target`, `netns-dep` on `--network container:netns-target`): resolving id→name at
-      `list_containers()` time works correctly (verified directly), and a same-run recreate of
-      both together works too (dependency-first ordering means the dependent's create() call uses
-      the *current* target id since `list_containers()` snapshots before either container is
-      touched). But Docker itself always re-resolves and re-stores a `container:<name>` reference
-      as a concrete id at `create()` time — it never persists the name — so if the target gets
-      recreated in one poll (new id) while the dependent isn't touched until a *later* poll, the
+      `list_containers()` time works correctly, and a same-run recreate of both together works
+      too. But Docker itself always re-resolves and re-stores a `container:<name>` reference as a
+      concrete id at `create()` time — it never persists the name — so if the target got recreated
+      in one poll (new id) while the dependent wasn't touched until a *later* poll, the
       dependent's `HostConfig.NetworkMode` (unchanged since Docker doesn't update it on a running
-      container) still points at the target's now-**dead** id, and by then there is no longer any
-      container object for `_resolve_network_mode_container_ref` to look up at all — the
-      id→name mapping is unrecoverable once the old id is actually gone. Reproduced exactly this:
-      recreated `netns-target` alone (new id), then recreated `netns-dep` alone in the next run —
-      `create()` succeeded (Docker doesn't validate `container:<id>` targets at create time either)
-      but `start()` failed with `"joining network namespace of container: No such container: <dead
-      id>"`. The existing rollback correctly renamed `netns-dep` back with no orphaned state, and
-      (see the now-fixed rollback-restart item below) even a rollback that also tries to restart
-      the old container can't succeed here, since the old container's *own* stored `NetworkMode`
-      references the same dead target id — so the service stays down until manual intervention
-      either way, and the underlying condition doesn't change on retry, so the *next* automatic
-      poll would fail identically forever. A real fix likely means treating
-      a dependent-via-network_mode as forcibly stale whenever its target updates (cascading beyond
-      today's stop/start-ordering-only relationship), which is a real design change, not a
-      quick patch — flagging for a decision rather than fixing unprompted.
+      container) still pointed at the target's now-**dead** id, permanently: reproduced by
+      recreating `netns-target` alone, then `netns-dep` alone in the next run — `create()`
+      succeeded but `start()` failed with `"joining network namespace of container: No such
+      container: <dead id>"`, and every subsequent poll would fail identically forever, since
+      nothing in Docker retains the old-id→new-id relationship once the old id is gone.
+      **Fixed 2026-07-15** by making network-mode sharing a first-class dependency, same tier as
+      the `depends-on` label: `Container.network_mode_target()` (new) feeds into `links()`, so
+      `stop_order()` now sequences a network-mode dependent after its target automatically, no
+      label needed; and `core/updater.run()` gained `_cascade_network_mode_dependents()`, which
+      forces a *real* recreate (not the same-image restart-in-place shortcut) for any container
+      whose `network_mode_target()` is stale this run, even though its own image is unchanged —
+      this is what actually closes the gap, since it guarantees the dependent is always recreated
+      in the *same* poll as its target, while the target's old id (and thus the id→name
+      resolution) still exists. Covered by a new unit test
+      (`test_run_cascades_recreate_to_network_mode_dependents`) and confirmed live 2026-07-15: two
+      fresh containers (`cascade-target`, `cascade-dep`, the latter on an untouched `busybox:latest`
+      so it's provably not independently stale), only `cascade-target`'s image rebuilt, single
+      `run()` with both included — both recreated, zero failures, and `cascade-dep`'s new
+      `NetworkMode` correctly points at `cascade-target`'s *new* id. **Residual caveat**: this only
+      helps when both containers are in the same run's filtered target set — an operator using
+      `--include`/`--exclude` asymmetrically (monitoring the target but explicitly excluding its
+      network-mode dependent, or vice versa) can still hit the original gap, since cascading only
+      operates over containers that already passed `core/filter.apply()`. Not expected to matter
+      for the default (monitor-everything) configuration most real setups use.
 - [x] Related, more general issue (not specific to the above): whenever `recreate()`'s rollback
       fired for *any* reason, the old container was correctly renamed back but left **stopped**,
       not restarted — first noticed in both the `stop_timeout` bug and the `container:<id>` gap

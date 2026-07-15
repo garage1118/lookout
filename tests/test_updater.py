@@ -12,14 +12,18 @@ def make_container(
     labels: dict[str, str] | None = None,
     repo_digests: list[str] | None = None,
     image_name: str = "myapp:latest",
+    network_mode: str | None = None,
 ) -> Container:
+    inspect: dict[str, object] = {}
+    if network_mode is not None:
+        inspect["HostConfig"] = {"NetworkMode": network_mode}
     return Container(
         id=f"id-{name}",
         name=name,
         image_id=f"sha256:{name}-old",
         image_name=image_name,
         labels=labels or {},
-        inspect={},
+        inspect=inspect,
         repo_digests=repo_digests or [],
     )
 
@@ -159,6 +163,43 @@ def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
         "get_image_id:myapp:latest",
         "start:web",
     ]
+
+
+def test_run_cascades_recreate_to_network_mode_dependents() -> None:
+    # Regression test: Docker resolves a container:<name> NetworkMode
+    # reference to a concrete id at create() time and never updates it
+    # later. If "web" (the target) gets recreated without "sidecar" (which
+    # shares its network namespace) also being recreated in the same run,
+    # sidecar's reference would permanently point at web's now-dead old id.
+    # sidecar's own image is unchanged, so without cascading it would hit
+    # the same-image restart-in-place shortcut instead of a real recreate.
+    web = make_container("web", image_name="myapp:latest", repo_digests=["myapp@sha256:old"])
+    sidecar = make_container(
+        "sidecar",
+        image_name="other:latest",
+        repo_digests=["other@sha256:same"],
+        network_mode="container:web",
+    )
+    docker_client = FakeDockerClient([web, sidecar])
+    docker_client.found_image_id = "sha256:web-new"
+    docker_client.local_image_id = sidecar.image_id
+    registry_client = FakeRegistryClient(
+        {"myapp:latest": "sha256:new", "other:latest": "sha256:same"}
+    )
+
+    session = run(docker_client, registry_client, settings(no_pull=True))
+
+    assert {c.name for c in session.stale} == {"web", "sidecar"}
+    assert {c.name for c in session.updated} == {"web", "sidecar"}
+    assert session.failed == []
+    assert f"recreate:sidecar:{sidecar.image_id}" in docker_client.calls
+    assert "start:sidecar" not in docker_client.calls
+    # web (the dependency) stops after sidecar (the dependent) and starts
+    # before it, same ordering contract as the depends-on label.
+    assert docker_client.calls.index("stop:sidecar") < docker_client.calls.index("stop:web")
+    assert docker_client.calls.index(
+        f"recreate:web:{docker_client.local_image_id}"
+    ) < docker_client.calls.index(f"recreate:sidecar:{sidecar.image_id}")
 
 
 def test_run_counts_update_as_successful_despite_post_update_hook_error() -> None:
