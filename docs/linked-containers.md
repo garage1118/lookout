@@ -16,6 +16,12 @@ docker run -d --name wordpress --label io.lookout.depends-on=mysql wordpress-ima
 If `mysql` needs an update, lookout will stop `wordpress` first, then `mysql`; on the way back up
 it recreates and starts `mysql` first, then `wordpress`.
 
+A legacy `--link` is also replayed onto the recreated container itself (not just used for
+ordering), so the link's `/etc/hosts` alias and injected environment variables still work after an
+update. The `depends-on` label is ordering-only — it doesn't create a Docker link, since it exists
+specifically for the modern, link-free way of connecting containers (a shared user-defined network,
+where name-based DNS resolution needs no explicit link at all).
+
 The dependency graph is only built from containers that are actually stale in the current run —
 lookout doesn't stop a healthy dependency just because something depends on it.
 

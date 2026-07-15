@@ -125,6 +125,10 @@ def build_create_kwargs(
     if binds:
         kwargs["volumes"] = binds
 
+    links = _build_links(host_config.get("Links") or [])
+    if links:
+        kwargs["links"] = links
+
     restart_policy = host_config.get("RestartPolicy") or {}
     if restart_policy.get("Name") and restart_policy["Name"] != "no":
         kwargs["restart_policy"] = restart_policy
@@ -216,6 +220,21 @@ def build_create_kwargs(
     # mode and create()'s `network=` param can't carry per-network aliases.
 
     return RecreateSpec(create_kwargs=kwargs, networks=networks)
+
+
+def _build_links(raw_links: list[str]) -> dict[str, str]:
+    """"/other-name:/this-name/alias" -> {"other-name": "alias"}, for legacy
+    `--link`. HostConfig.Links records each side's fully-resolved name at
+    link-creation time, not raw user input -- the alias is just the last
+    path segment of the target side. docker-py's `links` kwarg accepts this
+    exact {name: alias} shape (docker.utils.normalize_links)."""
+    links: dict[str, str] = {}
+    for raw in raw_links:
+        source, _, target = raw.partition(":")
+        name = source.lstrip("/")
+        alias = target.rsplit("/", 1)[-1]
+        links[name] = alias
+    return links
 
 
 _SUPPORTED_MOUNT_TYPES = {"bind", "volume"}

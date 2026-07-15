@@ -689,6 +689,35 @@ def test_healthcheck_overridden_by_user_is_kept() -> None:
     assert spec.create_kwargs["healthcheck"]["Test"] == ["CMD-SHELL", "echo custom"]
 
 
+def test_legacy_links_are_carried_over() -> None:
+    # HostConfig.Links records each side's fully-resolved name, not raw
+    # user input: "/other-name:/this-name/alias" -- the alias is the last
+    # path segment of the target side.
+    container = Container(
+        id="abc123",
+        name="web",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"Links": ["/db:/web/database", "/cache:/web/cache"]},
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.create_kwargs["links"] == {"db": "database", "cache": "cache"}
+
+
+def test_no_links_omits_links_kwarg() -> None:
+    container = load("minimal")
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "links" not in spec.create_kwargs
+
+
 def test_no_old_image_config_falls_back_to_verbatim_copy() -> None:
     # Comprehensive fixture with no old_image_config argument at all --
     # existing (pre-subtraction) behavior must be unaffected.

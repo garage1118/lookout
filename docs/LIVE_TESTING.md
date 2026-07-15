@@ -261,3 +261,9 @@ every real bug in this codebase.
       been exercised against a live daemon yet. Needs: a container started from image A, image B
       published under the same tag with a different default `CMD` and `HEALTHCHECK`, confirm the
       recreated container picks up B's defaults rather than A's.
+- [ ] Legacy `--link` carried over on recreate (`docker/recreate.py` `_build_links`,
+      `docker/client.py` `_HOST_CONFIG_KWARGS`) — added during code review (not caught live).
+      Unit-tested against a hand-built `HostConfig.Links` value only. Needs: two containers started
+      with `docker run --link db:database ... web`, update `web` (or `db`, forcing a cascade via
+      `stop_order`), confirm `web`'s `/etc/hosts` alias and `DATABASE_*` env vars still resolve
+      after the recreate.

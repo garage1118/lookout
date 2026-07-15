@@ -37,6 +37,7 @@ _HOST_CONFIG_KWARGS = frozenset(
         "pid_mode",
         "ipc_mode",
         "network_mode",
+        "links",
     }
 )
 
