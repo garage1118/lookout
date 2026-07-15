@@ -45,6 +45,15 @@ nothing updated, failed, or stale is skipped entirely (containers skipped becaus
 pinned-by-digest or their registry check failed don't count as "activity" by themselves, since a
 registry-check failure is already logged locally at error level).
 
+Note that `stale` alone counts as activity here, deliberately: a container stuck stale — most
+commonly `--monitor-only`, or `--no-pull` with no newer local image available yet — is actionable
+state an operator should keep hearing about, not a one-time event. This means
+`--notify-only-on-change` will fire on **every** poll for as long as that container stays stale,
+not just the first time it's noticed. If that's too noisy for a permanently-monitor-only container,
+either resolve the staleness (update it by hand, or pin it by digest) or filter it out of lookout's
+monitored set — there's no separate flag to silence a specific container's stale notifications
+while still checking it.
+
 lookout can also send a one-time notification when it starts, separate from the per-run summary —
 set `--notify-on-startup` / `LOOKOUT_NOTIFY_ON_STARTUP` (default: off). It fires once per process
 start, in both `--run-once` and daemon mode (so `--run-once` with the flag set sends two messages:
