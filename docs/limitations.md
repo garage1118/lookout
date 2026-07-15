@@ -34,6 +34,13 @@ over instead of being permanently shadowed. `ExposedPorts` is not subtracted thi
 old-image-only `EXPOSE` entry is copied over as harmless metadata, not a functional override) — see
 `docker/recreate.py`'s module docstring.
 
+`--gpus`/`DeviceRequests`, `--runtime`, `--dns-search`/`--dns-opt`, `--volumes-from`,
+`--userns`/`--uts`, `--cgroup-parent`, `--isolation`, CPU pinning (`--cpuset-cpus`/
+`--cpuset-mems`/`--cpu-quota`/`--cpu-period`), `--blkio-weight`, `--oom-score-adj`/
+`--oom-kill-disable`, `--memory-reservation`/`--memory-swappiness`, and `--mount type=tmpfs`
+(distinct from the legacy `--tmpfs` flag, which was already carried over) are all carried over on
+recreate — previously silently dropped.
+
 A container attached to an additional custom network after creation via `docker network connect`
 (rather than at `docker run --network` time) keeps that attachment across a recreate even though
 `HostConfig.NetworkMode` itself only ever names the *primary* network from create time and never

@@ -280,15 +280,46 @@ def test_mixed_relabeled_and_plain_mounts_split_correctly() -> None:
     ]
 
 
-def test_tmpfs_mount_is_not_carried_over() -> None:
+def test_mount_type_tmpfs_is_carried_over() -> None:
     # Not a captured fixture (no live daemon available here) — a minimal,
-    # hand-built stand-in for Docker's documented tmpfs entry shape in
-    # `docker inspect`'s Mounts array, to pin down that unsupported mount
-    # types are skipped explicitly rather than passed through with an
-    # accidentally-harmless empty source.
+    # hand-built stand-in for Docker's documented `--mount type=tmpfs` entry
+    # shape in `docker inspect`'s Mounts array. Distinct from the legacy
+    # `--tmpfs` flag (HostConfig.Tmpfs), covered separately below.
     container = Container(
         id="abc123",
         name="tmpfs-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {},
+            "Mounts": [
+                {
+                    "Type": "tmpfs",
+                    "Destination": "/tmp/scratch",
+                    "RW": True,
+                    "TmpfsOptions": {"SizeBytes": 67108864, "Mode": 1777},
+                }
+            ],
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    mounts: list[Mount] = spec.create_kwargs["mounts"]
+    assert mounts[0]["Target"] == "/tmp/scratch"
+    assert mounts[0]["Type"] == "tmpfs"
+    assert mounts[0]["ReadOnly"] is False
+    assert mounts[0]["TmpfsOptions"] == {"SizeBytes": 67108864, "Mode": 1777}
+
+
+def test_mount_type_tmpfs_without_options_is_still_carried_over() -> None:
+    # TmpfsOptions isn't reliably present on every Docker version's runtime
+    # Mounts summary -- the mount itself must still survive without it.
+    container = Container(
+        id="abc123",
+        name="tmpfs-no-opts-test",
         image_id="sha256:old",
         image_name="myapp:latest",
         labels={},
@@ -301,7 +332,10 @@ def test_tmpfs_mount_is_not_carried_over() -> None:
 
     spec = build_create_kwargs(container, "sha256:newimage")
 
-    assert "mounts" not in spec.create_kwargs
+    mounts: list[Mount] = spec.create_kwargs["mounts"]
+    assert mounts[0]["Target"] == "/tmp/scratch"
+    assert mounts[0]["Type"] == "tmpfs"
+    assert "TmpfsOptions" not in mounts[0]
 
 
 def test_ulimits_sysctls_devices_dns_extra_hosts_tmpfs_are_carried_over() -> None:
@@ -357,8 +391,17 @@ def test_resource_limits_are_carried_over() -> None:
             "Config": {},
             "HostConfig": {
                 "Memory": 134217728,
+                "MemoryReservation": 67108864,
+                "MemorySwappiness": 10,
                 "NanoCpus": 500000000,
                 "CpuShares": 512,
+                "CpusetCpus": "0-1",
+                "CpusetMems": "0",
+                "CpuQuota": 50000,
+                "CpuPeriod": 100000,
+                "BlkioWeight": 300,
+                "OomScoreAdj": 500,
+                "OomKillDisable": True,
                 "MemorySwap": -1,
                 "PidsLimit": 100,
             },
@@ -368,8 +411,17 @@ def test_resource_limits_are_carried_over() -> None:
     spec = build_create_kwargs(container, "sha256:newimage")
 
     assert spec.create_kwargs["mem_limit"] == 134217728
+    assert spec.create_kwargs["mem_reservation"] == 67108864
+    assert spec.create_kwargs["mem_swappiness"] == 10
     assert spec.create_kwargs["nano_cpus"] == 500000000
     assert spec.create_kwargs["cpu_shares"] == 512
+    assert spec.create_kwargs["cpuset_cpus"] == "0-1"
+    assert spec.create_kwargs["cpuset_mems"] == "0"
+    assert spec.create_kwargs["cpu_quota"] == 50000
+    assert spec.create_kwargs["cpu_period"] == 100000
+    assert spec.create_kwargs["blkio_weight"] == 300
+    assert spec.create_kwargs["oom_score_adj"] == 500
+    assert spec.create_kwargs["oom_kill_disable"] is True
     assert spec.create_kwargs["memswap_limit"] == -1
     assert spec.create_kwargs["pids_limit"] == 100
 
@@ -385,8 +437,17 @@ def test_unset_resource_limits_are_not_carried_over() -> None:
             "Config": {},
             "HostConfig": {
                 "Memory": 0,
+                "MemoryReservation": 0,
+                "MemorySwappiness": -1,
                 "NanoCpus": 0,
                 "CpuShares": 0,
+                "CpusetCpus": "",
+                "CpusetMems": "",
+                "CpuQuota": 0,
+                "CpuPeriod": 0,
+                "BlkioWeight": 0,
+                "OomScoreAdj": 0,
+                "OomKillDisable": False,
                 "MemorySwap": 0,
                 "PidsLimit": None,
             },
@@ -395,7 +456,22 @@ def test_unset_resource_limits_are_not_carried_over() -> None:
 
     spec = build_create_kwargs(container, "sha256:newimage")
 
-    for key in ("mem_limit", "nano_cpus", "cpu_shares", "memswap_limit", "pids_limit"):
+    for key in (
+        "mem_limit",
+        "mem_reservation",
+        "mem_swappiness",
+        "nano_cpus",
+        "cpu_shares",
+        "cpuset_cpus",
+        "cpuset_mems",
+        "cpu_quota",
+        "cpu_period",
+        "blkio_weight",
+        "oom_score_adj",
+        "oom_kill_disable",
+        "memswap_limit",
+        "pids_limit",
+    ):
         assert key not in spec.create_kwargs
 
 
@@ -436,6 +512,91 @@ def test_log_config_security_and_process_options_are_carried_over() -> None:
     assert spec.create_kwargs["init"] is True
     assert spec.create_kwargs["pid_mode"] == "host"
     assert spec.create_kwargs["ipc_mode"] == "shareable"
+
+
+def test_namespace_runtime_and_dns_options_are_carried_over() -> None:
+    # Hand-built stand-in (no live daemon available here) for HostConfig's
+    # namespace/runtime/DNS fields.
+    container = Container(
+        id="abc123",
+        name="namespace-runtime-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {
+                "VolumesFrom": ["other-container:ro"],
+                "UsernsMode": "host",
+                "UTSMode": "host",
+                "CgroupParent": "/my-cgroup",
+                "Isolation": "hyperv",
+                "Runtime": "nvidia",
+                "DnsSearch": ["example.com"],
+                "DnsOptions": ["ndots:2"],
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.create_kwargs["volumes_from"] == ["other-container:ro"]
+    assert spec.create_kwargs["userns_mode"] == "host"
+    assert spec.create_kwargs["uts_mode"] == "host"
+    assert spec.create_kwargs["cgroup_parent"] == "/my-cgroup"
+    assert spec.create_kwargs["isolation"] == "hyperv"
+    assert spec.create_kwargs["runtime"] == "nvidia"
+    assert spec.create_kwargs["dns_search"] == ["example.com"]
+    assert spec.create_kwargs["dns_opt"] == ["ndots:2"]
+
+
+def test_default_runtime_runc_is_not_carried_over() -> None:
+    container = Container(
+        id="abc123",
+        name="default-runtime-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={"Config": {}, "HostConfig": {"Runtime": "runc"}},
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert "runtime" not in spec.create_kwargs
+
+
+def test_device_requests_are_carried_over() -> None:
+    # Hand-built stand-in (no live daemon available here) for a `--gpus all`
+    # container's HostConfig.DeviceRequests shape.
+    container = Container(
+        id="abc123",
+        name="gpu-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {
+                "DeviceRequests": [
+                    {
+                        "Driver": "nvidia",
+                        "Count": -1,
+                        "DeviceIDs": None,
+                        "Capabilities": [["gpu"]],
+                        "Options": {},
+                    }
+                ]
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    device_requests = spec.create_kwargs["device_requests"]
+    assert len(device_requests) == 1
+    assert device_requests[0]["Driver"] == "nvidia"
+    assert device_requests[0]["Count"] == -1
+    assert device_requests[0]["Capabilities"] == [["gpu"]]
 
 
 def test_default_ipc_mode_private_is_not_carried_over() -> None:

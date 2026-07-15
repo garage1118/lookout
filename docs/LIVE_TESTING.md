@@ -273,3 +273,13 @@ every real bug in this codebase.
       `docker run` container (default bridge), then `docker network connect mynet <container>`,
       then an update — confirm the recreated container is on both the default bridge and `mynet`
       afterward, not just the bridge.
+- [ ] Newly-mapped `HostConfig` fields carried over on recreate (`docker/recreate.py`
+      `build_create_kwargs`) — `DeviceRequests` (`--gpus`), `Runtime`, `DnsSearch`/`DnsOptions`,
+      `VolumesFrom`, `UsernsMode`/`UTSMode`, `CgroupParent`, `Isolation`, CPU pinning, `BlkioWeight`,
+      `OomScoreAdj`/`OomKillDisable`, `MemoryReservation`/`MemorySwappiness`, and
+      `--mount type=tmpfs`. Added during code review (not caught live). Unit-tested against
+      hand-built HostConfig dicts only — `DeviceRequests` and `--mount type=tmpfs` in particular
+      need a real daemon (a `--gpus`-requesting container recreated onto a host with a GPU; a
+      `--mount type=tmpfs,tmpfs-size=64m` container recreated and its tmpfs mount + size confirmed
+      afterward) since their exact `docker inspect` shape was inferred from Docker's API docs, not
+      captured from a live container.

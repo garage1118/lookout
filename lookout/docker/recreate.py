@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from docker.types import Healthcheck, LogConfig, Mount, Ulimit
+from docker.types import DeviceRequest, Healthcheck, LogConfig, Mount, Ulimit
 
 from lookout.docker.container import Container
 
@@ -140,6 +140,8 @@ def build_create_kwargs(
         kwargs["cap_drop"] = host_config["CapDrop"]
     if host_config.get("Privileged"):
         kwargs["privileged"] = True
+    if host_config.get("VolumesFrom"):
+        kwargs["volumes_from"] = host_config["VolumesFrom"]
 
     if host_config.get("Ulimits"):
         kwargs["ulimits"] = [Ulimit(**u) for u in host_config["Ulimits"]]
@@ -150,8 +152,16 @@ def build_create_kwargs(
             f"{d['PathOnHost']}:{d['PathInContainer']}:{d['CgroupPermissions']}"
             for d in host_config["Devices"]
         ]
+    if host_config.get("DeviceRequests"):
+        kwargs["device_requests"] = [
+            DeviceRequest(**dr) for dr in host_config["DeviceRequests"]
+        ]
     if host_config.get("Dns"):
         kwargs["dns"] = host_config["Dns"]
+    if host_config.get("DnsSearch"):
+        kwargs["dns_search"] = host_config["DnsSearch"]
+    if host_config.get("DnsOptions"):
+        kwargs["dns_opt"] = host_config["DnsOptions"]
     if host_config.get("ExtraHosts"):
         # HostConfig reports "host:ip" strings; create() wants a {host: ip} dict.
         kwargs["extra_hosts"] = dict(h.split(":", 1) for h in host_config["ExtraHosts"])
@@ -160,10 +170,31 @@ def build_create_kwargs(
 
     if host_config.get("Memory"):
         kwargs["mem_limit"] = host_config["Memory"]
+    if host_config.get("MemoryReservation"):
+        kwargs["mem_reservation"] = host_config["MemoryReservation"]
+    # -1 means "use the daemon default" (the common, un-set case); any other
+    # value (0-100) is a meaningful explicit --memory-swappiness.
+    memory_swappiness = host_config.get("MemorySwappiness")
+    if memory_swappiness is not None and memory_swappiness != -1:
+        kwargs["mem_swappiness"] = memory_swappiness
     if host_config.get("NanoCpus"):
         kwargs["nano_cpus"] = host_config["NanoCpus"]
     if host_config.get("CpuShares"):
         kwargs["cpu_shares"] = host_config["CpuShares"]
+    if host_config.get("CpusetCpus"):
+        kwargs["cpuset_cpus"] = host_config["CpusetCpus"]
+    if host_config.get("CpusetMems"):
+        kwargs["cpuset_mems"] = host_config["CpusetMems"]
+    if host_config.get("CpuQuota"):
+        kwargs["cpu_quota"] = host_config["CpuQuota"]
+    if host_config.get("CpuPeriod"):
+        kwargs["cpu_period"] = host_config["CpuPeriod"]
+    if host_config.get("BlkioWeight"):
+        kwargs["blkio_weight"] = host_config["BlkioWeight"]
+    if host_config.get("OomScoreAdj"):
+        kwargs["oom_score_adj"] = host_config["OomScoreAdj"]
+    if host_config.get("OomKillDisable"):
+        kwargs["oom_kill_disable"] = True
     # 0 means "not set" (the common case); -1 means "unlimited swap", which
     # is a meaningful explicit value worth carrying over, not a default.
     memory_swap = host_config.get("MemorySwap")
@@ -194,6 +225,18 @@ def build_create_kwargs(
     ipc_mode = host_config.get("IpcMode")
     if ipc_mode and ipc_mode != "private":
         kwargs["ipc_mode"] = ipc_mode
+    if host_config.get("UsernsMode"):
+        kwargs["userns_mode"] = host_config["UsernsMode"]
+    if host_config.get("UTSMode"):
+        kwargs["uts_mode"] = host_config["UTSMode"]
+    if host_config.get("CgroupParent"):
+        kwargs["cgroup_parent"] = host_config["CgroupParent"]
+    if host_config.get("Isolation"):
+        kwargs["isolation"] = host_config["Isolation"]
+    # "runc" is Runtime's own reported default when nothing custom was set.
+    runtime = host_config.get("Runtime")
+    if runtime and runtime != "runc":
+        kwargs["runtime"] = runtime
 
     container_healthcheck = config.get("Healthcheck")
     if container_healthcheck == image_config.get("Healthcheck"):
@@ -238,7 +281,7 @@ def _build_links(raw_links: list[str]) -> dict[str, str]:
     return links
 
 
-_SUPPORTED_MOUNT_TYPES = {"bind", "volume"}
+_SUPPORTED_MOUNT_TYPES = {"bind", "volume", "tmpfs"}
 
 
 _RELABEL_TOKENS = {"z", "Z"}
@@ -256,16 +299,37 @@ def _build_mounts(raw_mounts: list[dict[str, Any]]) -> tuple[list[Mount], list[s
     same way a real `docker run` mixing `-v` and `--mount` would), so
     relabeled mounts are carried over as `Binds`-style strings in a separate
     list rather than being dropped.
+
+    A `--mount type=tmpfs` entry (distinct from the legacy `--tmpfs` flag,
+    which populates `HostConfig.Tmpfs` directly and is handled separately in
+    `build_create_kwargs`) has no `Source`/relabel concept at all -- it's
+    carried over as its own `Mount(type="tmpfs")` entry. `TmpfsOptions`
+    (size/mode) isn't reliably present on every Docker version's runtime
+    `Mounts` summary, so it's read opportunistically rather than required.
     """
     mounts: list[Mount] = []
     binds: list[str] = []
     for m in raw_mounts:
         mount_type = m.get("Type", "volume")
         if mount_type not in _SUPPORTED_MOUNT_TYPES:
-            # tmpfs (and anything else Docker might report here) isn't
-            # carried over — skip explicitly rather than relying on the
-            # resulting empty source being harmlessly falsy past docker-py's
-            # own tmpfs handling.
+            # Anything else Docker might report here isn't carried over —
+            # skip explicitly rather than relying on the resulting empty
+            # source being harmlessly falsy past docker-py's own handling.
+            continue
+        if mount_type == "tmpfs":
+            tmpfs_opts = m.get("TmpfsOptions") or {}
+            tmpfs_mode = tmpfs_opts.get("Mode")
+            mounts.append(
+                Mount(
+                    target=m["Destination"],
+                    source=None,
+                    type="tmpfs",
+                    tmpfs_size=tmpfs_opts.get("SizeBytes"),
+                    # Mount() requires an int here (raises otherwise) --
+                    # guard against an unexpected shape rather than crash.
+                    tmpfs_mode=tmpfs_mode if isinstance(tmpfs_mode, int) else None,
+                )
+            )
             continue
         source = m.get("Name") if mount_type == "volume" else m.get("Source")
         mode_tokens = (m.get("Mode") or "").split(",")
