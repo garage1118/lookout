@@ -112,7 +112,12 @@ class RegistryClient:
     already gets for the auth challenge itself."""
 
     def __init__(self, timeout: float = 10.0, transport: httpx.BaseTransport | None = None) -> None:
-        self._client = httpx.Client(timeout=timeout, transport=transport)
+        # httpx defaults to NOT following redirects. Docker Hub/GHCR don't
+        # 3xx-redirect manifest requests today, so this hasn't been a live
+        # bug, but a registry that does would otherwise surface as the
+        # opaque "did not return a content digest" error below instead of
+        # actually reaching the manifest.
+        self._client = httpx.Client(timeout=timeout, transport=transport, follow_redirects=True)
 
     def get_latest_digest(
         self, image: str, auth: RegistryAuth | None, cache: AuthCache | None = None
@@ -137,7 +142,10 @@ class RegistryClient:
 
         digest = response.headers.get("docker-content-digest")
         if not digest:
-            raise RuntimeError(f"registry did not return a content digest for {image}")
+            raise RuntimeError(
+                f"registry did not return a content digest for {image} "
+                f"(HTTP {response.status_code} from {response.url})"
+            )
         return str(digest)
 
     def _authenticate(

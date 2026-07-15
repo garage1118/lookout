@@ -137,3 +137,40 @@ def test_cache_works_for_anonymous_registry() -> None:
 
     assert d1 == d2 == _DIGEST
     assert probe_calls == ["registry.example.com"]
+
+
+def test_manifest_redirect_is_followed() -> None:
+    # Regression test: httpx doesn't follow redirects by default. Docker
+    # Hub/GHCR don't 3xx-redirect manifest requests today, but a registry
+    # that does would otherwise surface as the opaque "did not return a
+    # content digest" error instead of actually reaching the manifest.
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v2/":
+            return httpx.Response(200)
+        if request.url.path == "/v2/app/manifests/latest":
+            return httpx.Response(
+                307, headers={"Location": "https://registry.example.com/v2/app/manifests/moved"}
+            )
+        if request.url.path == "/v2/app/manifests/moved":
+            return httpx.Response(200, headers={"Docker-Content-Digest": _DIGEST})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client = RegistryClient(transport=transport)
+
+    digest = client.get_latest_digest("registry.example.com/app:latest", None)
+
+    assert digest == _DIGEST
+
+
+def test_missing_digest_error_includes_status_and_url() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v2/":
+            return httpx.Response(200)
+        return httpx.Response(200)  # no Docker-Content-Digest header
+
+    transport = httpx.MockTransport(handler)
+    client = RegistryClient(transport=transport)
+
+    with pytest.raises(RuntimeError, match=r"HTTP 200.*manifests/latest"):
+        client.get_latest_digest("registry.example.com/app:latest", None)
