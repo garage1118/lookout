@@ -5,6 +5,7 @@ import time
 
 import click
 
+from lookout import __version__
 from lookout.config import Settings
 from lookout.core.updater import run as run_update
 from lookout.docker.client import DockerPyClient
@@ -113,6 +114,8 @@ def main(
     # LOOKOUT_LOG_LEVEL=DEBUG troubleshooting, quiet otherwise.
     if settings.log_level.upper() != "DEBUG":
         logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    logger.info("lookout v%s started", __version__)
 
     if settings.notify_on_startup:
         send_startup(settings.notification_urls)
