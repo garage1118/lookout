@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   test:
@@ -25,3 +26,17 @@ jobs:
 
       - name: mypy
         run: uv run mypy lookout
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No push -- this only proves the Dockerfile itself still builds.
+      # publish.yml is otherwise the first place a Dockerfile regression
+      # would surface, at actual release time.
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false

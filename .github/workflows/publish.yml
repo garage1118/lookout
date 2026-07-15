@@ -7,7 +7,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    # Tags aren't guaranteed to have run through CI on the branch (a tag
+    # pushed straight to a commit that was never opened as a PR skips it
+    # entirely) -- run the same test/ruff/mypy/Dockerfile-build gate here so
+    # a red commit can't ship just because a tag was pushed to it.
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
