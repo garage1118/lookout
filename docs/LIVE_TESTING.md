@@ -267,3 +267,9 @@ every real bug in this codebase.
       with `docker run --link db:database ... web`, update `web` (or `db`, forcing a cascade via
       `stop_order`), confirm `web`'s `/etc/hosts` alias and `DATABASE_*` env vars still resolve
       after the recreate.
+- [ ] `docker network connect`-added networks survive recreate on a bridge-mode container
+      (`docker/recreate.py` `_build_networks`) — added during code review (not caught live).
+      Unit-tested against a hand-built `NetworkSettings.Networks` value only. Needs: a plain
+      `docker run` container (default bridge), then `docker network connect mynet <container>`,
+      then an update — confirm the recreated container is on both the default bridge and `mynet`
+      afterward, not just the bridge.

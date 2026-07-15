@@ -34,6 +34,12 @@ over instead of being permanently shadowed. `ExposedPorts` is not subtracted thi
 old-image-only `EXPOSE` entry is copied over as harmless metadata, not a functional override) — see
 `docker/recreate.py`'s module docstring.
 
+A container attached to an additional custom network after creation via `docker network connect`
+(rather than at `docker run --network` time) keeps that attachment across a recreate even though
+`HostConfig.NetworkMode` itself only ever names the *primary* network from create time and never
+reflects later `connect()` calls — `docker/recreate.py`'s `_build_networks` looks at
+`NetworkSettings.Networks` directly rather than trusting `NetworkMode` alone for this.
+
 Non-bridge/custom `NetworkMode` values other than `container:<id>` (e.g. `host`, or an exotic
 driver-specific mode) are passed through as `network_mode` but not validated against a live
 daemon before the recreate call — deliberately left out of v1 since an invalid value already fails

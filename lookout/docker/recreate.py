@@ -33,7 +33,8 @@ from docker.types import Healthcheck, LogConfig, Mount, Ulimit
 
 from lookout.docker.container import Container
 
-_DEFAULT_NETWORK_MODES = {"default", "bridge", "host", "none"}
+_DEFAULT_NETWORK_MODES = {"default", "bridge"}
+_NO_EXTRA_NETWORKS_MODES = {"host", "none"}
 
 
 @dataclass
@@ -319,9 +320,21 @@ def _build_ports(
 
 
 def _build_networks(inspect: dict[str, Any], mode: str) -> list[NetworkAttachment]:
-    if mode in _DEFAULT_NETWORK_MODES or mode.startswith("container:"):
+    if mode in _NO_EXTRA_NETWORKS_MODES or mode.startswith("container:"):
         return []
     networks = inspect.get("NetworkSettings", {}).get("Networks") or {}
+    if mode in _DEFAULT_NETWORK_MODES and len(networks) <= 1:
+        # A single default-bridge attachment (the common case) needs no
+        # explicit handling here -- create() auto-attaches it. More than one
+        # entry means the container was additionally attached to a custom
+        # network after creation via `docker network connect`, which
+        # NetworkMode itself never reflects (it only ever names the
+        # *primary* network from create time) -- carry all of them over
+        # explicitly in that case, same as a container created directly on a
+        # custom network below (including the "bridge" entry itself, so the
+        # disconnect-then-reconnect-everything-listed dance in
+        # DockerPyClient.recreate() puts it back too).
+        return []
     attachments = []
     for name, cfg in networks.items():
         ipam = cfg.get("IPAMConfig") or {}

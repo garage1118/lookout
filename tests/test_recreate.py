@@ -689,6 +689,80 @@ def test_healthcheck_overridden_by_user_is_kept() -> None:
     assert spec.create_kwargs["healthcheck"]["Test"] == ["CMD-SHELL", "echo custom"]
 
 
+def test_bridge_mode_with_single_default_network_has_no_explicit_attachments() -> None:
+    # The common case: created plain (no --network flag), never `docker
+    # network connect`-ed to anything else. Nothing extra to carry over.
+    container = Container(
+        id="abc123",
+        name="bridge-only-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"NetworkMode": "bridge"},
+            "NetworkSettings": {"Networks": {"bridge": {}}},
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.networks == []
+    assert "network_mode" not in spec.create_kwargs
+
+
+def test_bridge_mode_container_connected_to_extra_network_is_carried_over() -> None:
+    # Regression test: a container created on the default bridge, then
+    # additionally attached to a custom network via `docker network
+    # connect`, has NetworkMode == "bridge" (never updated after create) but
+    # *two* entries in NetworkSettings.Networks. The connect()-added network
+    # must not be silently dropped on recreate just because NetworkMode
+    # itself still says "bridge".
+    container = Container(
+        id="abc123",
+        name="bridge-plus-custom-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"NetworkMode": "bridge"},
+            "NetworkSettings": {
+                "Networks": {
+                    "bridge": {},
+                    "mynet": {"Aliases": ["myapp"]},
+                }
+            },
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    names = {n.name: n.aliases for n in spec.networks}
+    assert names == {"bridge": [], "mynet": ["myapp"]}
+    assert "network_mode" not in spec.create_kwargs
+
+
+def test_host_mode_never_attaches_extra_networks() -> None:
+    container = Container(
+        id="abc123",
+        name="host-mode-test",
+        image_id="sha256:old",
+        image_name="myapp:latest",
+        labels={},
+        inspect={
+            "Config": {},
+            "HostConfig": {"NetworkMode": "host"},
+            "NetworkSettings": {"Networks": {"host": {}}},
+        },
+    )
+
+    spec = build_create_kwargs(container, "sha256:newimage")
+
+    assert spec.networks == []
+    assert spec.create_kwargs["network_mode"] == "host"
+
+
 def test_legacy_links_are_carried_over() -> None:
     # HostConfig.Links records each side's fully-resolved name, not raw
     # user input: "/other-name:/this-name/alias" -- the alias is the last
