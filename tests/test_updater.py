@@ -394,6 +394,24 @@ def test_run_skips_pinned_images() -> None:
     assert docker_client.calls == []
 
 
+def test_run_skips_containers_with_no_tagged_image_name() -> None:
+    # Regression test: a container started directly from an image id has no
+    # registry/repository/tag for the registry lookup to work with at all --
+    # it must be skipped cleanly up front instead of hitting the registry
+    # with a nonsense reference and logging a fresh exception every poll.
+    container = make_container("web", image_name="sha256:" + "a" * 64)
+    docker_client = FakeDockerClient([container])
+    registry_client = FakeRegistryClient({})
+
+    session = run(docker_client, registry_client, settings())
+
+    assert [(c.name, reason) for c, reason in session.skipped] == [
+        ("web", "no tagged image name")
+    ]
+    assert session.stale == []
+    assert docker_client.calls == []
+
+
 def test_run_records_registry_errors_as_skipped() -> None:
     container = make_container("web", repo_digests=["myapp@sha256:old"])
     docker_client = FakeDockerClient([container])

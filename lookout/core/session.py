@@ -12,7 +12,8 @@ class Session:
     updated: list[Container] = field(default_factory=list)
     failed: list[tuple[Container, Exception]] = field(default_factory=list)
     stale: list[Container] = field(default_factory=list)
-    # reason is "pinned" (pinned-by-digest, permanent/expected) or
+    # reason is "pinned" (pinned-by-digest, permanent/expected), "no tagged
+    # image name" (started directly from an image id, permanent/expected), or
     # "check failed" (the registry lookup or the local Docker staleness
     # fallback errored, transient/actionable) — see the "Skipped" section in
     # summary().

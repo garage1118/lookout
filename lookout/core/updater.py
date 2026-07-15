@@ -68,6 +68,14 @@ def run(
         if is_pinned(container.image_name):
             session.skipped.append((container, "pinned"))
             continue
+        if container.has_no_tagged_image_name():
+            # A container started directly from an image id has no
+            # registry/repository/tag for parse_image() to work with at all
+            # -- skip it with a clear, quiet reason instead of letting the
+            # registry lookup below fail with a fresh logged exception (and
+            # traceback) every single poll forever.
+            session.skipped.append((container, "no tagged image name"))
+            continue
         try:
             auth = resolve_auth(
                 container.image_name,

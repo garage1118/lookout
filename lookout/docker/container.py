@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -7,6 +8,8 @@ ENABLE_LABEL = "io.lookout.enable"
 MONITOR_ONLY_LABEL = "io.lookout.monitor-only"
 NO_PULL_LABEL = "io.lookout.no-pull"
 DEPENDS_ON_LABEL = "io.lookout.depends-on"
+
+_IMAGE_ID_RE = re.compile(r"^(sha256:)?[0-9a-f]{64}$")
 
 
 @dataclass
@@ -52,6 +55,18 @@ class Container:
 
     def is_no_pull(self) -> bool:
         return self.labels.get(NO_PULL_LABEL, "false").lower() == "true"
+
+    def has_no_tagged_image_name(self) -> bool:
+        """True if this container was started directly from an image id
+        (`docker run sha256:...` or a bare id, no repository/tag at all)
+        rather than a name Docker can resolve. `Config.Image` in that case is
+        either empty or the raw id, which `registry/digest.py`'s
+        `parse_image()` can't meaningfully turn into a registry/repository --
+        it produces a nonsense reference that 404s against the registry every
+        single poll, logged as a fresh "check failed" exception each time.
+        Checking this up front lets the caller skip once with a clear reason
+        instead."""
+        return not self.image_name or bool(_IMAGE_ID_RE.match(self.image_name))
 
     def links(self) -> list[str]:
         """Names of containers this one depends on (legacy links, depends-on

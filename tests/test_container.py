@@ -42,3 +42,29 @@ def test_has_digest_false_when_no_repo_digests() -> None:
     # - it just means this check can't answer the question on its own.
     container = Container.from_inspect({"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}})
     assert container.has_digest("sha256:anything") is False
+
+
+def test_has_no_tagged_image_name_true_for_empty_or_bare_image_id() -> None:
+    # A container started directly from an image id (docker run sha256:...,
+    # or a bare id) has no registry/repository/tag for parse_image() to work
+    # with -- this is what lets core/updater.run skip it cleanly instead of
+    # logging a fresh exception every poll.
+    no_image = Container.from_inspect({"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}})
+    assert no_image.has_no_tagged_image_name() is True
+
+    bare_digest = Container.from_inspect(
+        {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {"Image": "a" * 64}}
+    )
+    assert bare_digest.has_no_tagged_image_name() is True
+
+    prefixed_digest = Container.from_inspect(
+        {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {"Image": "sha256:" + "a" * 64}}
+    )
+    assert prefixed_digest.has_no_tagged_image_name() is True
+
+
+def test_has_no_tagged_image_name_false_for_a_real_image_name() -> None:
+    container = Container.from_inspect(
+        {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {"Image": "myapp:latest"}}
+    )
+    assert container.has_no_tagged_image_name() is False
