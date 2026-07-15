@@ -72,10 +72,13 @@ is a legacy `-v`/`Binds`-only concept), so a mount using it is instead carried o
 everything else. See `_build_mounts()` in `docker/recreate.py`.
 
 Separately, containers published with `-P` get their ephemeral host ports **pinned** on recreate:
-the previously assigned host port is reused verbatim instead of a fresh one being chosen. This
-isn't a lookout gap — `docker inspect` only ever records the concrete host port a container ended
-up with, so there's no way after the fact to tell "chosen by `-P`" apart from "fixed via
-`-p hostport:containerport`". Watchtower has the identical behavior for the identical reason.
+the previously assigned host port is reused verbatim instead of a fresh one being chosen. This is a
+deliberate choice, not an inherent limitation — `HostConfig.PublishAllPorts` does record whether
+`-P` was used, so lookout could pick a fresh ephemeral port each time if it wanted to. Pinning is
+the more useful default for an auto-updater though: anything depending on that port staying the
+same (a reverse proxy config, a firewall rule, a bookmark) would otherwise break on every update
+instead of staying stable across them. Watchtower has the identical behavior for the identical
+reason.
 
 Also not implemented: `--remove-volumes` (removing anonymous volumes on update),
 `--include-stopped`/`--include-restarting`/`--revive-stopped` (lookout only ever considers

@@ -11,11 +11,15 @@ Known simplifications, not yet handled:
   DockerClient before reaching this module — see client.py.)
 - Ephemeral host ports published with `-P` come back pinned to whatever host
   port they'd previously been assigned, rather than getting a fresh one on
-  recreate. This isn't a lookout gap to close: `docker inspect`'s
-  PortBindings only ever records the concrete host port a container ended up
-  with, with no way to tell in hindsight whether it came from `-P` or a fixed
-  `-p hostport:containerport`. Watchtower has the exact same behavior for the
-  same reason (it replays the original PortBindings verbatim too).
+  recreate. `HostConfig.PublishAllPorts` does actually record whether `-P`
+  was used (so this could be distinguished from a fixed
+  `-p hostport:containerport` if it mattered), but it's deliberately left
+  unused here: pinning the previous port is the more useful default for an
+  auto-updater specifically, since anything depending on that port (a
+  reverse proxy config, a firewall rule, a bookmark) would otherwise break
+  on every single update instead of staying stable across them. This also
+  matches Watchtower's behavior, which replays the original PortBindings
+  verbatim for the same reason.
 - `ExposedPorts` is copied as-is, including entries that only exist because
   the *old* image declared them via `EXPOSE` (as opposed to `Cmd`/`Env`/
   `Labels`/etc., which are subtracted against the old image's own `Config` in
