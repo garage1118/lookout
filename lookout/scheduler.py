@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def run_forever(job: Callable[[], None], interval_seconds: int) -> None:
     """Simple sleep-loop scheduler. Cron-style scheduling can replace this
-    later (see open question in the handoff doc) without touching `job`.
+    later (see docs/limitations.md's Scheduling section) without touching `job`.
 
     Exits promptly on SIGTERM/SIGINT rather than waiting out the interval —
     lookout typically runs as a container itself, and `docker stop` sends
