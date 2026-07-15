@@ -22,7 +22,9 @@ def run(
     2. check staleness against the registry (pinned images are skipped)
     3. pull (unless no-pull) each stale, non-monitor-only container's replacement image,
        before anything is stopped
-    4. stop them in dependency order, running pre-update hooks
+    4. stop them in dependency order, running pre-update hooks (skipping any
+       container whose resolved image already matches what it's running and
+       has no network-mode dependency -- nothing to actually do)
     5. recreate + start in reverse order, running post-update hooks
     6. optionally clean up superseded images
     7. record results into a Session
@@ -119,7 +121,28 @@ def run(
             logger.exception("failed to pull a new image for %s", container.name)
             session.failed.append((container, exc))
 
-    order = stop_order([c for c in to_update if c.name in new_image_ids])
+    # A container with no network-mode dependency whose resolved image is
+    # already what it's running (the common --no-pull case, or the pull path
+    # if nothing new landed since the last poll) has nothing to actually do —
+    # stopping and restarting it every single poll forever would be pure
+    # churn (and would needlessly fire pre/post-update hooks each time). Skip
+    # it entirely rather than routing it through stop/start. A container that
+    # *does* have a network-mode target still needs to go through the normal
+    # cycle even when its own image is unchanged, since whether it truly
+    # needs recreating depends on whether that target ends up recreated this
+    # run — decided by the existing target_was_recreated check below, which
+    # only sees containers that were actually stopped.
+    noop_names = {
+        c.name
+        for c in to_update
+        if c.name in new_image_ids
+        and c.network_mode_target() is None
+        and new_image_ids[c.name] == c.image_id
+    }
+
+    order = stop_order(
+        [c for c in to_update if c.name in new_image_ids and c.name not in noop_names]
+    )
     stopped: list[Container] = []
     for container in order:
         try:
@@ -141,15 +164,16 @@ def run(
             target_name = container.network_mode_target()
             target_was_recreated = target_name is not None and target_name in recreated_names
             if new_image_id == container.image_id and not target_was_recreated:
-                # Nothing to actually update onto. Most commonly hit with
-                # --no-pull: staleness is judged against the registry digest,
-                # but the update path uses whatever image is cached locally
-                # under the tag — if nothing external has pulled a newer one,
-                # that's the same image the container already runs, and
-                # recreating onto it would restart-loop the container every
-                # poll forever. Restart it in place instead and leave it
-                # counted as stale-not-updated. Harmless safety net on the
-                # pull path too, where it should never trigger in practice.
+                # Nothing to actually update onto. A container with no
+                # network-mode dependency in this situation was already
+                # filtered out before the stop loop above (see noop_names)
+                # and never reaches this point at all -- this branch is only
+                # ever hit by a network-mode dependent that got pulled into
+                # the stop/start cycle by the cascade (see
+                # _cascade_network_mode_dependents) but whose own target
+                # turned out not to actually get recreated this run after
+                # all. Restart it in place instead and leave it counted as
+                # stale-not-updated.
                 # A network-mode dependent whose target *was* actually
                 # recreated this run skips this shortcut even though its own
                 # image is unchanged — see _cascade_network_mode_dependents.

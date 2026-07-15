@@ -366,3 +366,17 @@ every real bug in this codebase.
       registry becomes available (e.g. re-run the `registry.3digital.com` scenario from the
       private-registry-auth entry above, but with `config.json` moved aside so only the env-var
       fallback can supply credentials, through a full stale → pull → recreate cycle).
+
+- [x] A no-op stale container is no longer stopped/restarted on every poll (`core/updater.run`) —
+      the bug and the fix were both confirmed live 2026-07-15, against a real `DockerPyClient` and
+      the real `core.updater.run()` orchestration (registry lookup stubbed to a fixed, non-existent
+      digest so the container is unconditionally judged stale, since this is specifically about the
+      no-op restart guard, not registry correctness). A `--no-pull` container whose locally cached
+      image already matches what it's running was run through `run()` twice in a row. Before the
+      fix: the container's id stayed the same across both runs (as expected — no-pull never
+      recreates onto a different image), but `State.StartedAt` changed after the first run, proving
+      it was actually stopped and restarted for no reason, and would be again every single poll
+      forever. After the fix (excluding any container with no `network_mode_target()` whose
+      resolved image already equals its current `image_id` from the stop/start cycle entirely, via
+      `noop_names`): both id and `StartedAt` stayed byte-for-byte identical across both runs — the
+      container is left completely untouched, still correctly counted in `stale` but not `updated`.

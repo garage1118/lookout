@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from lookout.config import Settings
-from lookout.core.lifecycle import POST_UPDATE_LABEL
+from lookout.core.lifecycle import POST_UPDATE_LABEL, PRE_UPDATE_LABEL
 from lookout.core.updater import run, stop_order
 from lookout.docker.container import DEPENDS_ON_LABEL, MONITOR_ONLY_LABEL, Container
 from lookout.registry.auth import RegistryAuth
@@ -161,7 +161,9 @@ def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
     # --no-pull recreates onto whatever's cached locally under the tag. If
     # nothing external has pulled a newer image, that's the same image
     # already running, and recreating onto it would restart-loop the
-    # container every poll forever with a false "updated" notification.
+    # container every poll forever with a false "updated" notification. A
+    # container with no network-mode dependency in this situation is a pure
+    # no-op and is never even stopped (see noop_names in core/updater.run).
     container = make_container("web", repo_digests=["myapp@sha256:old"])
     docker_client = FakeDockerClient([container])
     docker_client.local_image_id = container.image_id
@@ -175,8 +177,33 @@ def test_run_no_pull_skips_recreate_when_local_image_already_matches() -> None:
     assert docker_client.calls == [
         "find_local_image_id:myapp:latest:sha256:new",
         "get_image_id:myapp:latest",
-        "stop:web",
-        "start:web",
+    ]
+
+
+def test_run_leaves_noop_stale_container_completely_untouched() -> None:
+    # Regression test: a stale container with no network-mode dependency
+    # whose resolved image already matches what it's running has nothing to
+    # actually do. Before this fix it was still stopped and restarted every
+    # single poll forever (with pre/post-update hooks firing each time) even
+    # though its container id never changed -- this asserts it's now skipped
+    # entirely: no stop, no start, no hooks.
+    container = make_container(
+        "web",
+        repo_digests=["myapp@sha256:old"],
+        labels={PRE_UPDATE_LABEL: "true", POST_UPDATE_LABEL: "true"},
+    )
+    docker_client = FakeDockerClient([container])
+    docker_client.local_image_id = container.image_id
+    registry_client = FakeRegistryClient({"myapp:latest": "sha256:new"})
+
+    session = run(docker_client, registry_client, settings(no_pull=True))
+
+    assert [c.name for c in session.stale] == ["web"]
+    assert session.updated == []
+    assert session.failed == []
+    assert docker_client.calls == [
+        "find_local_image_id:myapp:latest:sha256:new",
+        "get_image_id:myapp:latest",
     ]
 
 
@@ -284,7 +311,11 @@ def test_run_network_mode_dependent_restarts_in_place_when_target_not_actually_r
 
     assert {c.name for c in session.stale} == {"web", "sidecar"}
     assert session.updated == []
-    assert "start:web" in docker_client.calls
+    # web has no network-mode dependency of its own and its image is
+    # unchanged, so it's a pure no-op this run -- never stopped or started
+    # at all (see noop_names in core/updater.run).
+    assert "stop:web" not in docker_client.calls
+    assert "start:web" not in docker_client.calls
     assert "start:sidecar" in docker_client.calls
     assert not any(c.startswith("recreate:") for c in docker_client.calls)
 
