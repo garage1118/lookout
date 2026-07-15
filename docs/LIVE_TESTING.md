@@ -95,10 +95,11 @@ every real bug in this codebase.
       delivers the right title/body; `send()` delivers a real `Session.summary()` render matching
       updated/failed/skipped containers; a malformed URL mixed in with a valid one logs a warning
       without crashing and doesn't block delivery to the valid one; `only_on_change=True` correctly
-      sends zero requests for a no-activity session. No bugs found. Doesn't cover any
-      service-specific payload quirks (Slack/Discord/Telegram's own expected shape) since the
-      receiver was generic JSON, not a real chat service — worth a real Telegram/Slack run from a
-      network that isn't blocking it, if that matters before 1.0.
+      sends zero requests for a no-activity session. No bugs found.
+      **Update 2026-07-15**: David confirmed live delivery to a real Telegram bot from a host that
+      isn't network-blocked, exercising all of the notification options — closing the
+      service-specific-payload-quirks gap called out above and in `CODE_REVIEW.md`'s loose ends.
+      No bugs found.
 - [x] Lifecycle hooks: pre-update / post-update, including post-update-error handling
       (`core/lifecycle.py`, `core/updater.py`) — confirmed live 2026-07-14 against a real
       `DockerPyClient` and the real `core.updater.run()` orchestration, in three parts:
