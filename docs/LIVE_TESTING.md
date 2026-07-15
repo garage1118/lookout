@@ -290,3 +290,10 @@ every real bug in this codebase.
       container standing in for a crash-orphan, then trigger a real update of `<container>` and
       confirm recreate() succeeds instead of hitting a 409 name conflict on the rename, and that
       the orphan is gone afterward.
+- [ ] Rollback rename-back failure no longer masks the original exception (`docker/client.py`
+      `recreate()`) — added during code review (not caught live). No automated test (would need to
+      simulate a rename() failure specifically during rollback, distinct from the already-covered
+      create()/start()-time failures). Needs: force a rollback (e.g. recreate onto a bogus image
+      id) while also making the rename-back step fail (e.g. a name conflict planted at that exact
+      moment) and confirm the original error is still what's logged/raised, and that `start()` is
+      still attempted on the old container despite the rename-back failure.

@@ -231,6 +231,13 @@ class DockerPyClient:
 
             new_container.start()
         except Exception:
+            # Every step below is best-effort and individually guarded: this
+            # block's job is to restore as much of the pre-update state as
+            # it can without ever letting a failure *here* replace the
+            # original exception being rolled back from (a bare `raise` at
+            # the end always re-raises that original exception, regardless
+            # of what happened in between) or short-circuit a later
+            # best-effort step.
             if new_container is not None:
                 try:
                     new_container.remove(force=True)
@@ -241,7 +248,18 @@ class DockerPyClient:
                         new_container.id,
                         container.name,
                     )
-            self.rename(container, container.name)
+            try:
+                self.rename(container, container.name)
+            except Exception:
+                # Left as <name>-lookout-old; _remove_stale_temp_container()
+                # clears it out of the way before this container's next
+                # recreate() attempt.
+                logger.exception(
+                    "failed to rename %s back to its original name during recreate "
+                    "rollback -- it will remain as %s until the next recreate",
+                    container.name,
+                    temp_name,
+                )
             try:
                 self._client.containers.get(container.id).start()
             except Exception:
