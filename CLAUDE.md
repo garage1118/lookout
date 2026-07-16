@@ -105,7 +105,12 @@ Each module's job:
   its hostname was stale from an earlier deployment). Instead it reads `/proc/self/mountinfo`'s
   `/etc/hostname` bind-mount source, which Docker always sets to
   `/var/lib/docker/containers/<real-id>/hostname` regardless of any hostname override; `$HOSTNAME`
-  is only a last-resort fallback if `/proc` isn't available at all.
+  is only a last-resort fallback if `/proc` isn't available at all. An explicit `--include` entry
+  bypasses the `--label-enable` scope gate (though not an explicit `io.lookout.enable=false`
+  disable, nor monitor-only/no-pull, which stay in effect regardless of how a container entered
+  scope) — some deployment tools (Portainer stacks in particular) make it impractical to attach a
+  custom label at all, and without this a container like that could never be reached under
+  `--label-enable` scope no matter what.
 - **`core/updater.py`** — orchestration. `_is_stale()` is the real staleness check: it trusts
   `Container.has_digest()` when it says fresh, but when that comes back `False` it falls back to
   `DockerClient.find_local_image_id()` (looks up whatever local image currently carries the

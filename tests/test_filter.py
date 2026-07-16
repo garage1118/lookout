@@ -42,6 +42,34 @@ def test_label_enable_scope_requires_explicit_true() -> None:
     assert [c.name for c in result] == ["enabled"]
 
 
+def test_include_names_bypasses_label_enable_scope_for_unlabelable_containers() -> None:
+    # Some deployment tools (e.g. Portainer stacks) make it impractical to
+    # attach a custom label at all -- under --label-enable scope such a
+    # container could otherwise never be reached no matter what, since it
+    # can never satisfy the "has the label" requirement. An explicit
+    # --include name is a deliberate enough signal to widen scope for it.
+    containers = [
+        make_container("no-label"),
+        make_container("also-no-label"),
+        make_container("enabled", {ENABLE_LABEL: "true"}),
+    ]
+
+    result = apply(containers, settings(label_enable=True, include_names=["no-label"]))
+
+    assert [c.name for c in result] == ["no-label"]
+
+
+def test_include_names_does_not_bypass_explicit_disable_label() -> None:
+    # --include only widens the --label-enable scope gate -- it doesn't
+    # override an explicit opt-out, which (unlike an absent label) the
+    # container's owner was clearly able to set.
+    containers = [make_container("disabled", {ENABLE_LABEL: "false"})]
+
+    result = apply(containers, settings(label_enable=True, include_names=["disabled"]))
+
+    assert result == []
+
+
 def test_include_names_restricts_to_named_containers() -> None:
     containers = [make_container("a"), make_container("b"), make_container("c")]
 
