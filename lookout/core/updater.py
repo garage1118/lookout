@@ -187,7 +187,7 @@ def run(
                 # image is unchanged — see _cascade_network_mode_dependents.
                 docker_client.start(container)
                 continue
-            new_container = docker_client.recreate(container, new_image_id)
+            new_container = docker_client.recreate(container)
             recreated_names.add(container.name)
             # recreate() creates, network-attaches, and starts the
             # replacement as one atomic-ish unit (rolling itself back on any

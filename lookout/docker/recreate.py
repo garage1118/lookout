@@ -64,7 +64,7 @@ class RecreateSpec:
 
 
 def build_create_kwargs(
-    container: Container, new_image_id: str, old_image_config: dict[str, Any] | None = None
+    container: Container, old_image_config: dict[str, Any] | None = None
 ) -> RecreateSpec:
     """`old_image_config` is the `Config` block of the image the container is
     *currently* running (not the new image) — pass it so values that are
@@ -82,7 +82,18 @@ def build_create_kwargs(
     image_config = old_image_config or {}
 
     kwargs: dict[str, Any] = {
-        "image": new_image_id,
+        # container.image_name (a "repo:tag" reference), not the resolved
+        # image id: Docker records whatever reference create() was given
+        # verbatim into the new container's own Config.Image, and the next
+        # poll reads that back as Container.image_name. Passing the id here
+        # made every successfully-updated container's Config.Image a bare
+        # sha256 id from then on, which Container.has_no_tagged_image_name()
+        # (correctly) treats as "started from an image id, no registry to
+        # check" -- permanently skipping it on every later poll (caught
+        # live). The tag was re-pointed at the freshly pulled/resolved image
+        # moments ago by the caller, so it still resolves to the same image
+        # here.
+        "image": container.image_name,
         "name": container.name,
         "detach": True,
     }

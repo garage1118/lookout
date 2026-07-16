@@ -77,7 +77,7 @@ class DockerClient(Protocol):
     def find_local_image_id(self, image_name: str, digest: str) -> str | None: ...
     def stop(self, container: Container, timeout: int) -> None: ...
     def rename(self, container: Container, new_name: str) -> None: ...
-    def recreate(self, container: Container, new_image_id: str) -> Container: ...
+    def recreate(self, container: Container) -> Container: ...
     def start(self, container: Container) -> None: ...
     def remove_image(self, image_id: str) -> None: ...
     def exec_run(self, container: Container, command: list[str]) -> tuple[int, bytes]: ...
@@ -179,7 +179,7 @@ class DockerPyClient:
     def rename(self, container: Container, new_name: str) -> None:
         self._client.containers.get(container.id).rename(new_name)
 
-    def recreate(self, container: Container, new_image_id: str) -> Container:
+    def recreate(self, container: Container) -> Container:
         """Create *and start* the replacement for an already-stopped
         container without losing it if anything in that sequence fails:
         rename the old container aside first, and only remove it once the
@@ -219,7 +219,7 @@ class DockerPyClient:
         conflict and this container's updates would fail identically,
         forever, until someone removed the orphan by hand.
         """
-        spec = build_create_kwargs(container, new_image_id, self._image_config(container.image_id))
+        spec = build_create_kwargs(container, self._image_config(container.image_id))
         temp_name = f"{container.name}-lookout-old"
         self._remove_stale_temp_container(temp_name)
         self.rename(container, temp_name)

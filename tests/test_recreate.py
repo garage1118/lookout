@@ -17,9 +17,9 @@ def load(name: str) -> Container:
 def test_minimal_container_has_no_extras() -> None:
     container = load("minimal")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
-    assert spec.create_kwargs["image"] == "sha256:newimage"
+    assert spec.create_kwargs["image"] == "alpine:latest"
     assert spec.create_kwargs["name"] == "lookout-recreate-minimal"
     assert spec.create_kwargs["command"] == ["sleep", "3600"]
     assert "hostname" not in spec.create_kwargs  # auto-generated, equals container id prefix
@@ -33,7 +33,7 @@ def test_minimal_container_has_no_extras() -> None:
 def test_comprehensive_container_env_and_labels() -> None:
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "FOO=bar" in spec.create_kwargs["environment"]
     assert "BAZ=qux" in spec.create_kwargs["environment"]
@@ -45,7 +45,7 @@ def test_comprehensive_container_env_and_labels() -> None:
 
 def test_comprehensive_container_hostname_explicit() -> None:
     container = load("comprehensive")
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
     assert spec.create_kwargs["hostname"] == "fixture-host"
 
 
@@ -68,7 +68,7 @@ def test_hostname_not_set_when_sharing_another_containers_network() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "hostname" not in spec.create_kwargs
 
@@ -76,7 +76,7 @@ def test_hostname_not_set_when_sharing_another_containers_network() -> None:
 def test_comprehensive_container_bind_and_named_volume_mounts() -> None:
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     mounts: list[Mount] = spec.create_kwargs["mounts"]
     by_target = {m["Target"]: m for m in mounts}
@@ -120,7 +120,7 @@ def test_selinux_relabel_fixture_binds_and_mounts_split_correctly() -> None:
     # DockerPyClient._create()'s docstring in docker/client.py.
     container = load("selinux-relabel")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     mounts: list[Mount] = spec.create_kwargs["mounts"]
     assert [m["Target"] for m in mounts] == ["/plain"]
@@ -151,7 +151,7 @@ def test_selinux_shared_relabel_bind_mount_goes_through_legacy_binds() -> None:
         ]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "mounts" not in spec.create_kwargs
     assert spec.create_kwargs["volumes"] == ["/host/shared:/data:rw,z"]
@@ -173,7 +173,7 @@ def test_selinux_private_relabel_readonly_bind_mount_goes_through_legacy_binds()
         ]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "mounts" not in spec.create_kwargs
     assert spec.create_kwargs["volumes"] == ["/host/priv:/priv:ro,Z"]
@@ -197,7 +197,7 @@ def test_selinux_relabel_volume_mount_goes_through_legacy_binds() -> None:
         ]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "mounts" not in spec.create_kwargs
     assert spec.create_kwargs["volumes"] == ["priv-vol:/vol:ro,Z"]
@@ -218,7 +218,7 @@ def test_mount_without_relabel_flag_is_unaffected_by_the_split() -> None:
         ]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "volumes" not in spec.create_kwargs
     mounts: list[Mount] = spec.create_kwargs["mounts"]
@@ -234,7 +234,7 @@ def test_mount_with_missing_mode_field_is_unaffected_by_the_split() -> None:
         [{"Type": "bind", "Source": "/host/nomode", "Destination": "/nomode", "RW": True}]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "volumes" not in spec.create_kwargs
     assert spec.create_kwargs["mounts"][0]["Target"] == "/nomode"
@@ -270,7 +270,7 @@ def test_mixed_relabeled_and_plain_mounts_split_correctly() -> None:
         ]
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     mounts: list[Mount] = spec.create_kwargs["mounts"]
     assert [m["Target"] for m in mounts] == ["/plain"]
@@ -305,7 +305,7 @@ def test_mount_type_tmpfs_is_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     mounts: list[Mount] = spec.create_kwargs["mounts"]
     assert mounts[0]["Target"] == "/tmp/scratch"
@@ -330,7 +330,7 @@ def test_mount_type_tmpfs_without_options_is_still_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     mounts: list[Mount] = spec.create_kwargs["mounts"]
     assert mounts[0]["Target"] == "/tmp/scratch"
@@ -367,7 +367,7 @@ def test_ulimits_sysctls_devices_dns_extra_hosts_tmpfs_are_carried_over() -> Non
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     ulimit = spec.create_kwargs["ulimits"][0]
     assert (ulimit["Name"], ulimit["Soft"], ulimit["Hard"]) == ("nofile", 1024, 2048)
@@ -408,7 +408,7 @@ def test_resource_limits_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.create_kwargs["mem_limit"] == 134217728
     assert spec.create_kwargs["mem_reservation"] == 67108864
@@ -454,7 +454,7 @@ def test_unset_resource_limits_are_not_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     for key in (
         "mem_limit",
@@ -499,7 +499,7 @@ def test_log_config_security_and_process_options_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.create_kwargs["stop_signal"] == "SIGUSR1"
     assert spec.create_kwargs["stop_timeout"] == 30
@@ -538,7 +538,7 @@ def test_namespace_runtime_and_dns_options_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.create_kwargs["volumes_from"] == ["other-container:ro"]
     assert spec.create_kwargs["userns_mode"] == "host"
@@ -560,7 +560,7 @@ def test_default_runtime_runc_is_not_carried_over() -> None:
         inspect={"Config": {}, "HostConfig": {"Runtime": "runc"}},
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "runtime" not in spec.create_kwargs
 
@@ -590,7 +590,7 @@ def test_device_requests_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     device_requests = spec.create_kwargs["device_requests"]
     assert len(device_requests) == 1
@@ -609,7 +609,7 @@ def test_default_ipc_mode_private_is_not_carried_over() -> None:
         inspect={"Config": {}, "HostConfig": {"IpcMode": "private"}},
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "ipc_mode" not in spec.create_kwargs
 
@@ -626,7 +626,7 @@ def test_static_ip_mac_fixture_survives_recreate() -> None:
     # exercised against a real daemon).
     container = load("static-ip-mac")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     attachment = spec.networks[0]
     assert attachment.name == "lookout-static-net"
@@ -663,7 +663,7 @@ def test_static_ip_and_mac_address_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     attachment = spec.networks[0]
     assert attachment.ipv4_address == "172.18.0.42"
@@ -673,7 +673,7 @@ def test_static_ip_and_mac_address_are_carried_over() -> None:
 
 def test_comprehensive_container_restart_policy() -> None:
     container = load("comprehensive")
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
     assert spec.create_kwargs["restart_policy"] == {
         "Name": "unless-stopped",
         "MaximumRetryCount": 0,
@@ -683,7 +683,7 @@ def test_comprehensive_container_restart_policy() -> None:
 def test_comprehensive_container_healthcheck() -> None:
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     hc: Healthcheck = spec.create_kwargs["healthcheck"]
     assert hc["Test"] == ["CMD-SHELL", "echo ok"]
@@ -694,7 +694,7 @@ def test_comprehensive_container_healthcheck() -> None:
 def test_comprehensive_container_networks_deferred_to_post_create() -> None:
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "network_mode" not in spec.create_kwargs  # default bridge auto-attaches, then swapped
     names = {n.name: n.aliases for n in spec.networks}
@@ -705,7 +705,7 @@ def test_comprehensive_container_networks_deferred_to_post_create() -> None:
 def test_comprehensive_container_caps_and_ports() -> None:
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.create_kwargs["cap_add"] == ["CAP_NET_ADMIN"]
     assert spec.create_kwargs["ports"] == {"80/tcp": "18080"}
@@ -734,7 +734,7 @@ def test_cmd_and_entrypoint_unchanged_from_image_are_omitted() -> None:
     )
     old_image_config = {"Cmd": ["/old-default"], "Entrypoint": ["/old-entry"]}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert "command" not in spec.create_kwargs
     assert "entrypoint" not in spec.create_kwargs
@@ -746,7 +746,7 @@ def test_cmd_and_entrypoint_overridden_by_user_are_kept() -> None:
     )
     old_image_config = {"Cmd": ["/old-default"], "Entrypoint": ["/old-entry"]}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert spec.create_kwargs["command"] == ["/user-override"]
     assert spec.create_kwargs["entrypoint"] == ["/user-entry"]
@@ -758,7 +758,7 @@ def test_env_entries_matching_old_image_default_are_dropped() -> None:
     )
     old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert spec.create_kwargs["environment"] == ["FOO=user-set"]
 
@@ -767,7 +767,7 @@ def test_env_entirely_matching_old_image_is_omitted() -> None:
     container = _container_with_config({"Env": ["PATH=/usr/local/bin:/usr/bin"]})
     old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert "environment" not in spec.create_kwargs
 
@@ -778,7 +778,7 @@ def test_env_override_of_same_key_with_different_value_is_kept() -> None:
     container = _container_with_config({"Env": ["PATH=/custom"]})
     old_image_config = {"Env": ["PATH=/usr/local/bin:/usr/bin"]}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert spec.create_kwargs["environment"] == ["PATH=/custom"]
 
@@ -789,7 +789,7 @@ def test_labels_matching_old_image_default_are_dropped() -> None:
     )
     old_image_config = {"Labels": {"org.opencontainers.image.version": "1.0"}}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert spec.create_kwargs["labels"] == {"custom": "user-set"}
 
@@ -800,7 +800,7 @@ def test_working_dir_user_stop_signal_unchanged_from_image_are_omitted() -> None
     )
     old_image_config = {"WorkingDir": "/old-app", "User": "olduser", "StopSignal": "SIGUSR1"}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert "working_dir" not in spec.create_kwargs
     assert "user" not in spec.create_kwargs
@@ -818,7 +818,7 @@ def test_healthcheck_unchanged_from_image_is_omitted() -> None:
     container = _container_with_config({"Healthcheck": healthcheck})
     old_image_config = {"Healthcheck": healthcheck}
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert "healthcheck" not in spec.create_kwargs
 
@@ -845,7 +845,7 @@ def test_healthcheck_overridden_by_user_is_kept() -> None:
         }
     }
 
-    spec = build_create_kwargs(container, "sha256:newimage", old_image_config)
+    spec = build_create_kwargs(container, old_image_config)
 
     assert spec.create_kwargs["healthcheck"]["Test"] == ["CMD-SHELL", "echo custom"]
 
@@ -866,7 +866,7 @@ def test_bridge_mode_with_single_default_network_has_no_explicit_attachments() -
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.networks == []
     assert "network_mode" not in spec.create_kwargs
@@ -897,7 +897,7 @@ def test_bridge_mode_container_connected_to_extra_network_is_carried_over() -> N
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     names = {n.name: n.aliases for n in spec.networks}
     assert names == {"bridge": [], "mynet": ["myapp"]}
@@ -927,7 +927,7 @@ def test_bridge_mode_container_on_single_custom_network_is_carried_over() -> Non
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     names = {n.name: n.aliases for n in spec.networks}
     assert names == {"mynet": ["myapp"]}
@@ -948,7 +948,7 @@ def test_host_mode_never_attaches_extra_networks() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.networks == []
     assert spec.create_kwargs["network_mode"] == "host"
@@ -970,7 +970,7 @@ def test_legacy_links_are_carried_over() -> None:
         },
     )
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert spec.create_kwargs["links"] == {"db": "database", "cache": "cache"}
 
@@ -978,7 +978,7 @@ def test_legacy_links_are_carried_over() -> None:
 def test_no_links_omits_links_kwarg() -> None:
     container = load("minimal")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "links" not in spec.create_kwargs
 
@@ -988,7 +988,7 @@ def test_no_old_image_config_falls_back_to_verbatim_copy() -> None:
     # existing (pre-subtraction) behavior must be unaffected.
     container = load("comprehensive")
 
-    spec = build_create_kwargs(container, "sha256:newimage")
+    spec = build_create_kwargs(container)
 
     assert "FOO=bar" in spec.create_kwargs["environment"]
     assert spec.create_kwargs["labels"] == {

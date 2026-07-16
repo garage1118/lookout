@@ -47,6 +47,11 @@ class FakeDockerClient:
         self.found_image_id: str | None = None
         self.local_image_id = "sha256:local"
         self.pull_auth: dict[str, RegistryAuth | None] = {}
+        # Mirrors the real DockerPyClient: create()-by-tag resolves to
+        # whatever a tag was last pulled/looked-up as, so recreate() (which
+        # takes no image id of its own -- see docker/recreate.py) looks the
+        # id up here by image name instead of being told it directly.
+        self._resolved_image_ids: dict[str, str] = {}
 
     def list_containers(self) -> list[Container]:
         return list(self._containers)
@@ -56,10 +61,12 @@ class FakeDockerClient:
             raise RuntimeError(f"pull failed: {image}")
         self.pull_auth[image] = auth
         self.calls.append(f"pull:{image}")
+        self._resolved_image_ids[image] = "sha256:pulled"
         return "sha256:pulled"
 
     def get_image_id(self, image_name: str) -> str:
         self.calls.append(f"get_image_id:{image_name}")
+        self._resolved_image_ids[image_name] = self.local_image_id
         return self.local_image_id
 
     def find_local_image_id(self, image_name: str, digest: str) -> str | None:
@@ -76,7 +83,8 @@ class FakeDockerClient:
     def rename(self, container: Container, new_name: str) -> None:
         raise NotImplementedError
 
-    def recreate(self, container: Container, new_image_id: str) -> Container:
+    def recreate(self, container: Container) -> Container:
+        new_image_id = self._resolved_image_ids[container.image_name]
         self.calls.append(f"recreate:{container.name}:{new_image_id}")
         return Container(
             id=f"new-{container.name}",
