@@ -98,6 +98,11 @@ stop-all/start-all batch per the dependency order, not one at a time).
 Credential helpers (`credHelpers`/`credsStore` in `config.json`) are not supported — see
 [Private registries](private-registries.md). Only the plain `auths` section is read.
 
+The digest lookup's TLS trust is also independent of the Docker daemon's — a self-signed or
+private-CA registry needs its CA trusted inside lookout's own container specifically (`SSL_CERT_FILE`/
+`SSL_CERT_DIR`), not via the daemon's `/etc/docker/certs.d`. See
+[Private registries](private-registries.md#tls-self-signed-or-private-ca-registries).
+
 ## Lifecycle hooks
 
 Pre-check/post-check hooks (run around the staleness check itself, not just the update) are not

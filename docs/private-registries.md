@@ -95,6 +95,41 @@ GHCR, ECR, and most others), lookout exchanges any configured credentials for a 
 via the realm in that challenge — the same flow the `docker` CLI itself uses. If the registry has
 no bearer challenge at all, any configured credentials are sent as HTTP Basic auth directly.
 
+## TLS: self-signed or private-CA registries
+
+The digest lookup always connects over `https://` using [`httpx`](https://www.python-httpx.org/),
+independently of both the Docker daemon and the host's own certificate trust. A registry behind a
+self-signed certificate or a private CA needs to be trusted *inside lookout's own container*, not
+wherever the daemon does its own `docker pull` from — and installing the CA into the container's
+OS-level trust store (e.g. `update-ca-certificates`) isn't enough either: httpx's default TLS
+context only consults `certifi`'s bundled CA list, not the OS trust store, unless overridden.
+
+Set `SSL_CERT_FILE` to a PEM file containing your CA (append it to a copy of certifi's own bundle
+first if lookout also needs to reach public registries), or `SSL_CERT_DIR` to a directory of
+certificates in OpenSSL's hashed-symlink format (`c_rehash`):
+
+```yaml
+services:
+  lookout:
+    image: lookout
+    environment:
+      SSL_CERT_FILE: /certs/ca-bundle.pem
+    volumes:
+      - /etc/lookout/ca-bundle.pem:/certs/ca-bundle.pem:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+Without one of these set, a registry behind a self-signed or private-CA certificate fails with an
+`SSLCertVerificationError` regardless of what the Docker daemon itself already trusts.
+
+## Registry propagation delay
+
+Some registries enforce a short TTL on their own end — DigitalOcean's Container Registry is a
+known example — so a fresh push can take a few minutes to become visible to a digest lookup made
+right after it. If a container isn't detected as stale immediately after pushing, this is a common
+cause, not a lookout bug: there's no visibility into a registry's own caching behavior, and nothing
+to configure around it beyond waiting for the next poll.
+
 ## Not implemented
 
 **Credential helpers** (`credHelpers`/`credsStore` in `config.json`) are not supported. This is
@@ -102,6 +137,14 @@ how AWS ECR, GCP Artifact Registry, and some other registries are typically auth
 static credentials in `config.json`. If your `config.json` only has a credential helper entry for
 a registry (no plain `auths` entry), lookout falls back to anonymous access for that registry,
 which will fail for anything private.
+
+**Workaround**: swap the helper for a static credential where the registry supports one.
+GCR/Artifact Registry accepts a service-account JSON key as a plain username/password pair —
+`docker login -u _json_key -p "$(cat key.json)" gcr.io` writes a normal `auths` entry lookout can
+read directly, and unlike an OAuth token it doesn't expire on its own. ECR has no equivalent
+long-lived option: `aws ecr get-login-password` tokens are only valid for 12 hours, so a static
+`config.json` entry for ECR needs something else (a cron job, a sidecar) to keep rewriting it —
+there's no way around that without credential-helper support.
 
 **`identitytoken` entries** — what `docker login` writes for some SSO-based flows instead of a
 plain password — are also not handled. The base64 `auth` blob still decodes, but the password half

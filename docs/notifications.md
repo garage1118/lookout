@@ -18,7 +18,10 @@ docker run -d \
 ```
 
 See [github.com/caronc/apprise#popular-notification-services](https://github.com/caronc/apprise#popular-notification-services)
-for the full list of supported services and their URL formats.
+for the full list of supported services and their URL formats. A few worth calling out explicitly,
+since they came up repeatedly as feature requests against Watchtower and need zero lookout code
+since Apprise already ships them: Pushover (`pover://`), Bark (`bark://`), MQTT
+(`mqtt://`/`mqtts://`), a generic JSON webhook (`json://`), and syslog (`syslog://`).
 
 ### Telegram
 
