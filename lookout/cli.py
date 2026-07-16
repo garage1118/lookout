@@ -137,6 +137,21 @@ def main(
     docker_client = DockerPyClient(docker_host=settings.docker_host)
     registry_client = RegistryClient()
 
+    if docker_client.is_swarm_active():
+        # Not a hard exit: a Swarm-enabled daemon can still run standalone
+        # (non-service) containers lookout can manage normally. But
+        # service-managed containers get task-suffixed names that never
+        # match a plain --include, and even one an operator did select would
+        # just get overwritten by Swarm's own reconciliation the instant
+        # lookout recreated it -- exactly the "ran fine, updated nothing, no
+        # error, for weeks" trap a Watchtower user reported. Say so loudly
+        # once at startup instead of leaving that silent.
+        logger.warning(
+            "this Docker daemon is a Swarm member -- lookout does not manage Swarm "
+            "services (see README); only standalone containers on this daemon, if "
+            "any, will be monitored"
+        )
+
     def job() -> None:
         session = run_update(docker_client, registry_client, settings)
         logger.info(session.summary())

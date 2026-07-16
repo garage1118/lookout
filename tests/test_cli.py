@@ -10,8 +10,12 @@ from lookout.core.session import Session
 
 
 class FakeDockerClient:
-    def __init__(self, docker_host: str | None = None) -> None:
+    def __init__(self, docker_host: str | None = None, swarm_active: bool = False) -> None:
         self.docker_host = docker_host
+        self.swarm_active = swarm_active
+
+    def is_swarm_active(self) -> bool:
+        return self.swarm_active
 
 
 class FakeRegistryClient:
@@ -207,6 +211,49 @@ def test_run_once_succeeds_despite_startup_notification_failure(monkeypatch: Any
     result = runner.invoke(cli_module.main, ["--run-once", "--notify-on-startup"])
 
     assert result.exit_code == 0, result.output
+
+
+def test_swarm_active_logs_warning_but_still_runs(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    # Regression test for a real Watchtower trap: a Swarm-enabled daemon
+    # produced a clean, error-free poll that updated nothing at all, for
+    # weeks, before anyone traced it back to Swarm. lookout must not repeat
+    # that silently -- but it also shouldn't refuse to start, since
+    # standalone containers on a Swarm-enabled daemon are still fair game.
+    monkeypatch.setattr(
+        cli_module, "DockerPyClient", lambda docker_host=None: FakeDockerClient(swarm_active=True)
+    )
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    run_calls: list[object] = []
+    monkeypatch.setattr(
+        cli_module, "run_update", lambda dc, rc, settings: run_calls.append(1) or Session()
+    )
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    with caplog.at_level("WARNING", logger="lookout.cli"):
+        result = CliRunner().invoke(cli_module.main, ["--run-once"])
+
+    assert result.exit_code == 0, result.output
+    assert len(run_calls) == 1
+    assert any("Swarm" in record.message for record in caplog.records)
+
+
+def test_swarm_inactive_logs_no_warning(monkeypatch: Any, caplog: Any) -> None:
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
+    monkeypatch.setattr(
+        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
+    )
+
+    with caplog.at_level("WARNING", logger="lookout.cli"):
+        result = CliRunner().invoke(cli_module.main, ["--run-once"])
+
+    assert result.exit_code == 0, result.output
+    assert not any("Swarm" in record.message for record in caplog.records)
 
 
 def test_notify_on_startup_not_called_when_flag_omitted(monkeypatch: Any) -> None:

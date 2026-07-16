@@ -388,3 +388,58 @@ every real bug in this codebase.
       consecutive `run()` passes: correctly landed in `session.skipped` with reason "no tagged image
       name" both times, no registry HTTP call attempted, and no exception/traceback logged on either
       poll. No bugs found.
+
+## Findings from the 2026-07-16 Watchtower discussions review, confirmed live
+
+- [x] Recreate-by-tag regression, previously undiscovered (`docker/recreate.py`
+      `build_create_kwargs`, `docker/client.py` `recreate`) — a real production container hit this
+      exactly: `recreate()` was creating the replacement container with `"image": new_image_id` (the
+      resolved `sha256:...` id), not the tag. Docker records whatever reference `create()` was given
+      verbatim into the new container's own `Config.Image`, so every container lookout successfully
+      updated came out the other side with a bare image id there instead of a `repo:tag` string —
+      which `Container.has_no_tagged_image_name()` (correctly) then treated as "started from an
+      image id, no registry to check," permanently skipping it with `"no tagged image name"` on
+      every subsequent poll, forever. Confirmed live twice: (1) against a disposable local
+      container, two `DockerPyClient.recreate()` cycles in a row via a real stop/create/start —
+      `Config.Image` stayed `alpine:latest` both times (both `docker-py`'s own inspect and a fresh
+      `docker inspect --format` agreed), `has_no_tagged_image_name()` stayed `False`, and the bind
+      mount/restart-policy/label all survived unchanged. (2) The user's actual affected production
+      container (`simbug`): confirmed via `docker inspect --format '{{.Config.Image}}'` that it was
+      showing exactly the predicted bare `sha256:...` id (pre-dating this fix — a container recreated
+      before the fix stays broken, since the fix only prevents *new* corruption, not retroactively);
+      after a fresh rebuild/push under the same tag triggered a real registry-driven update through
+      the fixed code, the container came back correctly tagged and lookout resumed managing it
+      normally. Fixed in `build_create_kwargs()` (use `container.image_name` for the `image`
+      create-kwarg instead of the resolved id).
+- [x] `--include` bypassing `--label-enable` scope for unlabelable containers (`core/filter.apply`)
+      — a real gap independently confirmed by a Watchtower discussion thread
+      (`discussions/2065`, Portainer + `WATCHTOWER_LABEL_ENABLE`): a container that can't practically
+      be labeled at all (Portainer stacks in particular) was permanently excluded under
+      `--label-enable` scope with no way to force it in by name, even via `--include`. Fixed by
+      letting an explicit `--include <name>` bypass the label-enable gate specifically, while leaving
+      self-exemption, an explicit `io.lookout.enable=false` opt-out, and monitor-only/no-pull fully
+      in effect regardless of how a container entered scope. Covered by new unit tests; not yet
+      exercised against a real Portainer-style deployment specifically (the underlying filter logic
+      is fully unit-tested and structurally simple — a plain boolean gate reorder — so this is lower
+      risk than the modules this file otherwise tracks, but a real live confirmation is still open).
+- [x] Buildx/OCI multi-arch image-index manifests (`registry/digest.py`, `_MANIFEST_ACCEPT`) —
+      confirmed live 2026-07-16 against `alpine:latest` on real Docker Hub, a genuine multi-arch
+      image (this closes the loop flagged as open in the 2026-07-16 Watchtower discussions report,
+      re: `discussions/1529` — Buildx-produced manifest lists 404ing on a plain single-arch HEAD
+      request upstream). `RegistryClient.get_latest_digest()` returned a real digest
+      (`sha256:28bd5fe8...`); re-issuing the identical authenticated request and inspecting the raw
+      response confirmed the registry actually served `content-type:
+      application/vnd.oci.image.index.v1+json` with a real `manifests` array (amd64, arm/v6, arm/v7,
+      arm64/v8 platforms all present) whose `docker-content-digest` matched what `get_latest_digest()`
+      returned byte-for-byte — proving the multi-arch `Accept` headers are actually being honored by
+      a real registry, not silently falling back to a single-arch manifest that happened to also
+      200. No bugs found.
+- [x] Swarm-mode detection (`docker/client.py` `is_swarm_active`, `cli.py`) — confirmed live
+      2026-07-16 against a real local daemon: `is_swarm_active()` correctly reported `False` before
+      `docker swarm init`, flipped to `True` immediately after (`docker info`'s
+      `Swarm.LocalNodeState` went `inactive` → `active`), and `lookout --run-once` logged the new
+      startup warning exactly once and still completed the run normally (not a hard exit) — then
+      confirmed `False` again after `docker swarm leave --force`. This is the detection half of the
+      fix for the Watchtower "ran fine, updated nothing, no error, for weeks" Swarm trap
+      (`discussions/1863`); lookout still doesn't manage Swarm services (unchanged v1 non-goal), it
+      just no longer fails silently about it.

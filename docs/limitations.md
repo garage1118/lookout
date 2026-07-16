@@ -7,6 +7,14 @@ modules that touch them. Both are listed here so they're not mistaken for bugs.
 ## Out of scope for v1
 
 - **Docker Swarm service updates.** lookout only targets a single Docker daemon's containers.
+  Service-managed containers get task-suffixed names (`<service>.<slot>.<task-id>`) that never
+  match a plain `--include`, and even one an operator did manage to select would just get
+  overwritten again by Swarm's own reconciliation the instant lookout recreated it — a real
+  Watchtower user lost weeks tracing a clean, error-free, zero-update poll back to exactly this. To
+  avoid the same silent trap, lookout logs one explicit warning at startup when the daemon is a
+  Swarm member (`DockerClient.is_swarm_active()`) instead of running quietly and updating nothing.
+  It does not refuse to start: standalone (non-service) containers on a Swarm-enabled daemon are
+  still monitored normally.
 - **HTTP API / webhook-triggered updates.** Watchtower can run in a mode where updates are only
   triggered by an HTTP request instead of polling. Not implemented.
 - **Multi-host / fleet management.** One lookout instance manages one Docker daemon.

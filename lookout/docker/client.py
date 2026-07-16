@@ -71,6 +71,7 @@ def _strip_tag(image_name: str) -> str:
 
 
 class DockerClient(Protocol):
+    def is_swarm_active(self) -> bool: ...
     def list_containers(self) -> list[Container]: ...
     def pull_image(self, image: str, auth: RegistryAuth | None = None) -> str: ...
     def get_image_id(self, image_name: str) -> str: ...
@@ -91,6 +92,22 @@ class DockerPyClient:
         self._client = (
             docker_sdk.DockerClient(base_url=docker_host) if docker_host else docker_sdk.from_env()
         )
+
+    def is_swarm_active(self) -> bool:
+        """True if this daemon is a member of a Swarm (manager or worker).
+
+        Watchtower users hit a real trap here: running against a
+        Swarm-enabled daemon produced a clean, error-free poll that updated
+        nothing at all, for weeks, before anyone traced it back to Swarm --
+        service-managed containers get task-suffixed names
+        (`<service>.<slot>.<task-id>`) that never match a plain `--include`
+        entry, and even a container an operator did manage to select would
+        just get overwritten again by Swarm's own reconciliation the moment
+        lookout recreated it out from under the service. cli.py logs an
+        explicit warning based on this at startup instead of letting that
+        same silent no-op recur here."""
+        state = (self._client.info().get("Swarm") or {}).get("LocalNodeState")
+        return state not in (None, "", "inactive")
 
     def list_containers(self) -> list[Container]:
         raw = self._client.containers.list(all=False)
