@@ -52,12 +52,18 @@ class NetworkAttachment:
 
 @dataclass
 class RecreateSpec:
-    """create_kwargs go to containers.create(); when `networks` is non-empty
-    the created container will be on the default bridge network and the
-    caller must disconnect that and connect each entry in `networks`
-    (including the original primary) so per-network aliases survive — the
-    create()-time `network=` shortcut doesn't support aliases, and Docker
-    won't let extra networks attach to a container created in "none" mode."""
+    """create_kwargs go to containers.create(). When `networks` is
+    non-empty, the caller attaches every entry directly at create() time via
+    a full per-network endpoint config (aliases/static IP/MAC) — same as a
+    plain `docker run --network X --ip ...` for the first, plus `docker
+    network connect` for any others, done atomically in one create() call
+    instead of as separate calls afterward. No default-bridge detour is
+    needed for any number of target networks: a single create() call
+    reliably accepts multiple fully-configured network attachments at once
+    on a modern daemon (confirmed live 2026-07-17) — an earlier version of
+    this code assumed otherwise and routed anything beyond one target
+    network through create-on-bridge-then-disconnect-then-reconnect, which
+    is why that path may still be referenced in older history/docs."""
 
     create_kwargs: dict[str, Any]
     networks: list[NetworkAttachment] = field(default_factory=list)
@@ -273,10 +279,11 @@ def build_create_kwargs(
         mode = host_config.get("NetworkMode")
         if mode and mode not in ("default", "bridge"):
             kwargs["network_mode"] = mode
-    # else: let the default bridge auto-attach at create time; the caller
-    # disconnects it and connects the real networks after, since Docker
-    # rejects connecting extra networks to a container created in "none"
-    # mode and create()'s `network=` param can't carry per-network aliases.
+    # else: leave network/networking_config entirely unset here -- the
+    # caller (DockerPyClient.recreate()) builds those directly from
+    # `networks`, since doing so needs a live client instance (to derive
+    # the daemon's negotiated API version for docker-py's EndpointConfig)
+    # that this module deliberately doesn't have access to.
 
     return RecreateSpec(create_kwargs=kwargs, networks=networks)
 
@@ -409,18 +416,24 @@ def _build_networks(inspect: dict[str, Any], mode: str) -> list[NetworkAttachmen
         # explicitly, because NetworkMode alone can't be trusted to describe
         # the container's real attachments: it only ever names the *primary*
         # network from create time, never reflecting a later `docker network
-        # connect` -- and lookout's own recreate() produces exactly that
-        # shape (create on the default bridge, then swap in the real
-        # networks), so the mode of anything lookout has recreated once is
-        # always "bridge"/"default" no matter which networks it's actually
-        # on. Checking the attachment *names* rather than counting them is
-        # what keeps a second recreate from silently dropping a custom
-        # network (caught live: a `--network my_net` container survived its
-        # first recreate but landed back on the plain bridge after its
-        # second). The "bridge" entry itself is included in the carry-over
-        # list when mixed with custom networks, so the
-        # disconnect-then-reconnect-everything-listed dance in
-        # DockerPyClient.recreate() puts it back too.
+        # connect`. DockerPyClient.recreate() itself no longer produces this
+        # shape going forward (it attaches every target network directly at
+        # create() time now, so NetworkMode stays accurate afterward -- see
+        # its docstring) -- but this check remains essential for two real
+        # cases: a container a human `docker network connect`-ed onto
+        # directly (still a completely ordinary, unrelated-to-lookout
+        # scenario), and a container recreated by an *older* version of
+        # lookout before this fix, whose NetworkMode is already stuck on
+        # "bridge" -- checking attachment *names* here rather than trusting
+        # NetworkMode is exactly what lets that container self-heal
+        # correctly the next time it's recreated under the current code,
+        # rather than silently losing its real network. (Historically, this
+        # same check is also what stopped a second recreate from silently
+        # dropping a custom network when lookout's own recreate() *did*
+        # still produce this shape -- caught live: a `--network my_net`
+        # container survived its first recreate but landed back on the
+        # plain bridge after its second, before that class of bug was
+        # fixed.)
         return []
     attachments = []
     for name, cfg in networks.items():

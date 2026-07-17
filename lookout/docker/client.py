@@ -237,28 +237,60 @@ class DockerPyClient:
         forever, until someone removed the orphan by hand.
         """
         spec = build_create_kwargs(container, self._image_config(container.image_id))
-        temp_name = f"{container.name}-lookout-old"
-        self._remove_stale_temp_container(temp_name)
-        self.rename(container, temp_name)
-        new_container = None
-        try:
-            new_container = self._create(spec.create_kwargs)
-            assert new_container.id is not None
-
-            if spec.networks:
-                # Creation auto-attaches the default bridge network; swap it
-                # for the real target networks so aliases can be set
-                # per-network.
-                self._client.networks.get("bridge").disconnect(new_container, force=True)
-                for attachment in spec.networks:
-                    self._client.networks.get(attachment.name).connect(
-                        new_container,
+        create_kwargs = spec.create_kwargs
+        if spec.networks:
+            # Every target network is attached directly at create() time
+            # with its own full endpoint config (aliases/static IP/MAC) in
+            # the same call, exactly like a plain `docker run --network X
+            # --ip ...` (plus `docker network connect` for any others, done
+            # atomically here instead of as separate calls afterward) --
+            # rather than creating on the default bridge network and
+            # disconnecting/reconnecting onto the real ones after. That
+            # bridge detour left HostConfig.NetworkMode permanently
+            # reporting "bridge" even though the container was correctly
+            # attached elsewhere (Docker never rewrites NetworkMode after
+            # creation), which turned out to be more than cosmetic: caught
+            # live via a real Portainer report -- Portainer's own
+            # "Duplicate/Edit" form pre-fills its network selector from
+            # NetworkMode, not the container's actual
+            # NetworkSettings.Networks, so re-deploying a lookout-recreated
+            # container from Portainer silently dropped it onto bridge (and
+            # re-attached the real network with no static IP config,
+            # landing a different auto-assigned address). An earlier
+            # version of this fix only covered a single target network,
+            # under the assumption that a single create() call couldn't
+            # reliably attach more than one fully-configured network at
+            # once -- that assumption did not hold up under live testing
+            # against a real modern daemon (multiple full EndpointsConfig
+            # entries in one create_container() call worked cleanly), so
+            # the bridge-then-swap path this comment used to describe has
+            # been retired entirely rather than kept around for the
+            # multi-network case alone. `network_mode` is set to the first
+            # target network arbitrarily -- Docker has no strong concept of
+            # "primary" once a container has more than one attachment, and
+            # `NetworkMode` naming one over another doesn't change which
+            # networks are actually attached or how they behave.
+            create_kwargs = dict(create_kwargs)
+            create_kwargs["network_mode"] = spec.networks[0].name
+            create_kwargs["networking_config"] = self._client.api.create_networking_config(
+                {
+                    attachment.name: self._client.api.create_endpoint_config(
                         aliases=attachment.aliases or None,
                         ipv4_address=attachment.ipv4_address,
                         ipv6_address=attachment.ipv6_address,
                         mac_address=attachment.mac_address,
                     )
+                    for attachment in spec.networks
+                }
+            )
 
+        temp_name = f"{container.name}-lookout-old"
+        self._remove_stale_temp_container(temp_name)
+        self.rename(container, temp_name)
+        new_container = None
+        try:
+            new_container = self._create(create_kwargs)
+            assert new_container.id is not None
             new_container.start()
         except Exception:
             # Every step below is best-effort and individually guarded: this
@@ -333,9 +365,9 @@ class DockerPyClient:
             )
 
     def _create(self, create_kwargs: dict[str, Any]) -> Any:
-        """containers.create(), except for two cases that need the
-        low-level API instead: "volumes" (legacy Binds strings) and
-        "stop_timeout".
+        """containers.create(), except for three cases that need the
+        low-level API instead: "volumes" (legacy Binds strings),
+        "stop_timeout", and "networking_config".
 
         docker-py's high-level containers.create(volumes=[...]) doesn't
         just set HostConfig.Binds from the strings — it also independently
@@ -363,10 +395,23 @@ class DockerPyClient:
         kwarg (not part of HostConfig at all), so it's left in `kwargs`
         below rather than routed into host_config_kwargs.
 
-        Both cases fall through to the plain high-level call when neither
+        "networking_config" (a single target network's full endpoint config
+        -- aliases/static IP/MAC -- attached directly at create() time, see
+        recreate()) similarly isn't part of RUN_CREATE_KWARGS/
+        RUN_HOST_CONFIG_KWARGS on the high-level API, even though the
+        low-level create_container() has always accepted it directly as a
+        top-level kwarg (not part of HostConfig at all, so — like
+        stop_timeout — it's left in `kwargs` below rather than routed into
+        host_config_kwargs).
+
+        All three cases fall through to the plain high-level call when none
         applies — this low-level path only runs when actually needed.
         """
-        if "volumes" not in create_kwargs and "stop_timeout" not in create_kwargs:
+        if (
+            "volumes" not in create_kwargs
+            and "stop_timeout" not in create_kwargs
+            and "networking_config" not in create_kwargs
+        ):
             return self._client.containers.create(**create_kwargs)
 
         kwargs = dict(create_kwargs)

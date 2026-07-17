@@ -45,6 +45,12 @@ every real bug in this codebase.
       `docker-py`'s `Network.connect()` does correctly accept and apply the forwarded `mac_address`
       kwarg (previously only verified by reading its source, not exercised against a real daemon).
       Real fixture captured: `tests/fixtures/inspect/static-ip-mac.json`.
+      **Correction, 2026-07-17**: this MAC-address claim did not reproduce on re-test — see the
+      "MAC address not preserved beyond the first network" entry below (now fixed, but likely
+      mistaken rather than a regression at the time, since no lookout code change between
+      2026-07-14 and this re-test would explain the discrepancy). `recreate()` no longer calls
+      `Network.connect()` at all as of 2026-07-17, for any network, so this entry's exact setup can't
+      be re-run as originally described any more anyway.
 - [x] Rename-first `recreate()` survives a real failure (`docker/client.py`) — confirmed live
       2026-07-14, in two parts:
       - **create()-time rejection**: caught a real, separate, previously-undiscovered bug in the
@@ -443,3 +449,74 @@ every real bug in this codebase.
       fix for the Watchtower "ran fine, updated nothing, no error, for weeks" Swarm trap
       (`discussions/1863`); lookout still doesn't manage Swarm services (unchanged v1 non-goal), it
       just no longer fails silently about it.
+
+## Findings from the 2026-07-17 Portainer network report, confirmed live
+
+- [x] `HostConfig.NetworkMode` staleness after recreate was more than cosmetic
+      (`docker/client.py` `recreate`) — a real production report: after lookout recreated `simbug`
+      (a single-network macvlan container), `NetworkSettings.Networks` was correctly still `vlan`,
+      but `HostConfig.NetworkMode` had gone stale to `bridge` (a known, deliberate side effect of the
+      create-on-bridge-then-swap dance — Docker never rewrites `NetworkMode` after creation). Traced
+      the real-world impact: Portainer's own "Duplicate/Edit" form pre-fills its network selector
+      from `NetworkMode`, not the container's actual attachments — so using that form for an
+      unrelated edit (e.g. adding a label) on a lookout-recreated single-network container silently
+      redeployed it onto `bridge`, with the real network re-attached but *without* its static IP
+      (Docker's macvlan driver then auto-assigned a different address). Confirmed via the user's own
+      `docker inspect` output: `vlan` with a pinned `IPAMConfig.IPv4Address` before, `bridge` +
+      `vlan`-with-`IPAMConfig: null`-and-a-different-address after.
+
+      **Fixed** in `DockerPyClient.recreate()`, in two passes. First pass covered only a container
+      with exactly one target network, attaching it directly at `create()` time with its full
+      endpoint config (aliases/static IP/MAC) via the low-level API's `networking_config` — exactly
+      matching what a plain `docker run --network X --ip ...` does — instead of the old
+      create-on-bridge-then-swap dance, under the assumption (baked into the code at the time) that a
+      single `create()` call couldn't reliably attach more than one fully-configured network at once.
+      That assumption was tested directly and did **not** hold up: a single `create_container()` call
+      with multiple full `EndpointsConfig` entries in `networking_config` worked cleanly against this
+      real daemon (API 1.52) — both networks attached correctly, aliases and static IPs intact, no
+      bridge involved. So the second pass generalized the fix to **any** number of target networks,
+      retiring the bridge-then-swap path entirely rather than keeping it around for the multi-network
+      case alone.
+
+      Confirmed live 2026-07-17, single-network case: a real macvlan network (`--network vlan --ip
+      169.254.50.50 --network-alias simbug-alias`, no default bridge involved) through two consecutive
+      `DockerPyClient.recreate()` cycles — `HostConfig.NetworkMode` stayed `vlan` (not `bridge`) both
+      times, IP/MAC/alias all byte-for-byte unchanged, container running throughout. The `bridge`
+      network was confirmed to have never been touched at all (`docker network inspect bridge` showed
+      no reference to the container).
+
+      Confirmed live 2026-07-17, multi-network case (after generalizing): the same macvlan `vlan`
+      (with an explicitly pinned `--mac-address`) plus a second custom bridge network `cr-net2`
+      (static IP, alias), through two more recreate cycles — `HostConfig.NetworkMode` came back as a
+      real network name (`cr-net2`, whichever `_build_networks()` happened to list first — never
+      `bridge`), both networks' IPs and aliases survived unchanged across both cycles, and critically,
+      `vlan`'s pinned MAC address survived byte-for-byte both times too — closing the MAC-preservation
+      gap below as a direct consequence, not a separate fix. `bridge` was again confirmed untouched.
+
+      **Update 2026-07-17**: David hit a related-looking symptom in production after deploying this
+      fix — Portainer warned `"Unable to connect container: endpoint with name simbug already exists
+      in network vlan"` while trying to recreate `simbug` back onto `vlan`, leaving a `simbug-old`
+      leftover. Reproduction attempts here (a container run through lookout's real `recreate()`, one
+      and two cycles, then a simulated Portainer-style stop/rename/recreate) never hit this — it
+      turned out to be residual state from *before* this fix existed (the container had been through
+      the old bridge+vlan-with-wrong-IP mess from the earlier Portainer Duplicate/Edit bug), not
+      something the fixed code produces. Confirmed resolved once the updated lookout got a chance to
+      recreate the container cleanly through the fixed path — Portainer can now recreate a
+      lookout-recreated container without issue.
+
+- [x] **MAC address not preserved beyond the first network — found live 2026-07-17, fixed same day
+      as a consequence of the fix above.** While first verifying the multi-network path, `MacAddress`
+      did *not* survive recreate for either network — contradicting this file's own 2026-07-14 entry
+      above ("`docker-py`'s `Network.connect()` does correctly accept and apply the forwarded
+      `mac_address` kwarg"). Isolated it further: a bare, manual `network.connect(container,
+      mac_address="02:42:ac:11:00:77")` (no lookout code involved at all) also silently did *not*
+      apply the requested MAC — the daemon assigned a random one instead. This is a real Docker Engine
+      API limitation, not a lookout or docker-py bug: `POST /networks/{id}/connect` (what `docker
+      network connect` and `Network.connect()` both call) has apparently never actually supported
+      specifying a MAC address — `--mac-address` has always been a `docker run`/create-time-only
+      flag, matching the fact that `docker network connect --help` has never had a `--mac-address`
+      option either. This means the 2026-07-14 entry's claim was mistaken (or that daemon session
+      silently coincided with an unrelated matching MAC) — corrected here rather than left standing.
+      Since every network is now attached directly at `create()` time instead of via `connect()` (see
+      above), this whole class of bug is no longer reachable: confirmed live, `vlan`'s pinned MAC
+      survived a multi-network recreate exactly as shown above.

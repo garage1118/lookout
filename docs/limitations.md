@@ -55,6 +55,12 @@ A container attached to an additional custom network after creation via `docker 
 reflects later `connect()` calls — `docker/recreate.py`'s `_build_networks` looks at
 `NetworkSettings.Networks` directly rather than trusting `NetworkMode` alone for this.
 
+Every target network is attached directly at `create()` time with its own full config (aliases,
+static IP, MAC), so `HostConfig.NetworkMode` stays accurate after a recreate too, not just
+`NetworkSettings.Networks`. For a container on more than one network, `NetworkMode` names whichever
+one happens to be first in `_build_networks()`'s output — Docker has no real concept of "primary"
+beyond that field once a container has multiple attachments, so this is arbitrary but harmless.
+
 Non-bridge/custom `NetworkMode` values other than `container:<id>` (e.g. `host`, or an exotic
 driver-specific mode) are passed through as `network_mode` but not validated against a live
 daemon before the recreate call — deliberately left out of v1 since an invalid value already fails
