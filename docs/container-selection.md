@@ -5,7 +5,8 @@ containers get excluded, and they combine (a container must pass all of them to 
 
 0. **Self-exemption** — always applies, not configurable. See below.
 1. **Disable via label** — always applies.
-2. **`--label-enable` scope** — off by default; when on, only explicitly-enabled containers qualify.
+2. **`--label-enable` scope** — off by default; when on, only explicitly-enabled containers qualify,
+   *unless* the container is explicitly named in `--include` (see below).
 3. **`--include`/`--exclude` by name** — exclude always wins.
 
 ## Self-exemption
@@ -48,7 +49,17 @@ docker run -d --label io.lookout.enable=true someimage
 ```
 
 With `--label-enable` set, a container *without* the label is not monitored, even though the
-label's absence would otherwise default to "enabled."
+label's absence would otherwise default to "enabled" — **unless** that container is also named in
+`--include`, which bypasses the label-enable gate specifically. This exists for containers that
+can't practically be labeled at all (Portainer stacks in particular make this awkward): explicitly
+naming one in `--include` is a strong enough signal to widen scope for it, without requiring
+`--label-enable` to be turned off for every other container. This bypass only widens *scope* — an
+explicit `io.lookout.enable=false` disable (previous section) and monitor-only/no-pull both still
+apply regardless of how a container entered scope.
+
+```bash
+lookout --label-enable --include hard-to-label-container
+```
 
 ## Include / exclude by name
 
