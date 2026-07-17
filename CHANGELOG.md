@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.1] - 2026-07-17
 
 ### Fixed
 
@@ -50,4 +50,5 @@ First stable release.
 - Run-summary notifications through Apprise
 - Docker Hub images for `linux/amd64` and `linux/arm64`
 
+[1.0.1]: https://github.com/garage1118/lookout/releases/tag/v1.0.1
 [1.0.0]: https://github.com/garage1118/lookout/releases/tag/v1.0.0
