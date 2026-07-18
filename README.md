@@ -18,6 +18,7 @@ image digest, and recreate containers that are stale.
 - [docs/private-registries.md](docs/private-registries.md) — registry authentication
 - [docs/notifications.md](docs/notifications.md) — Apprise run-summary notifications
 - [docs/limitations.md](docs/limitations.md) — what's intentionally not implemented in v1
+- [ROADMAP.md](ROADMAP.md) — planned for a future release
 - [CHANGELOG.md](CHANGELOG.md) — release history
 
 ## Development

@@ -21,13 +21,15 @@ modules that touch them. Both are listed here so they're not mistaken for bugs.
 - **Running multiple scoped instances** (Watchtower's `--scope` label, for running several
   independent Watchtowers against the same daemon). Not implemented.
 - **A Prometheus metrics endpoint.** Not implemented.
-- **`--health-check` mode** for use as a container `HEALTHCHECK` command. Not implemented.
+- **`--health-check` mode** for use as a container `HEALTHCHECK` command. Not implemented — see
+  [Roadmap](../ROADMAP.md).
 
 ## Scheduling
 
 Only simple interval polling (`--interval`/`LOOKOUT_INTERVAL_SECONDS`) is implemented. Cron-style
 scheduling isn't — see `scheduler.py`'s `run_forever()`, which is written so a cron-based scheduler
-could replace its sleep loop later without touching the update logic itself.
+could replace its sleep loop later without touching the update logic itself. See
+[Roadmap](../ROADMAP.md).
 
 ## Container recreation
 
@@ -102,7 +104,8 @@ stop-all/start-all batch per the dependency order, not one at a time).
 ## Registry authentication
 
 Credential helpers (`credHelpers`/`credsStore` in `config.json`) are not supported — see
-[Private registries](private-registries.md). Only the plain `auths` section is read.
+[Private registries](private-registries.md) and [Roadmap](../ROADMAP.md). Only the plain `auths`
+section is read.
 
 The digest lookup's TLS trust is also independent of the Docker daemon's — a self-signed or
 private-CA registry needs its CA trusted inside lookout's own container specifically (`SSL_CERT_FILE`/

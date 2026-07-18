@@ -57,3 +57,4 @@ docker build -t lookout .
 - [Private registries](private-registries.md) — registry authentication
 - [Notifications](notifications.md) — run-summary notifications via Apprise
 - [Limitations](limitations.md) — what's intentionally not implemented in v1
+- [Roadmap](../ROADMAP.md) — planned for a future release
