@@ -8,3 +8,4 @@ watchtower/
 site/
 dist/
 CODE_REVIEW.md
+build_image.sh
