@@ -343,5 +343,5 @@ def _cleanup_images(
             continue  # update failed; old image is still the running one
         try:
             docker_client.remove_image(old.image_id)
-        except Exception:
-            logger.debug("skipping cleanup of %s (still in use?)", old.image_id)
+        except Exception as exc:
+            logger.debug("skipping cleanup of %s: %s", old.image_id, exc)

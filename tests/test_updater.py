@@ -43,6 +43,7 @@ class FakeDockerClient:
         self.pull_fail: set[str] = set()
         self.exec_fail: set[str] = set()
         self.find_local_image_id_fail: set[str] = set()
+        self.remove_image_fail: set[str] = set()
         self.removed_images: list[str] = []
         self.found_image_id: str | None = None
         self.local_image_id = "sha256:local"
@@ -99,6 +100,8 @@ class FakeDockerClient:
         self.calls.append(f"start:{container.name}")
 
     def remove_image(self, image_id: str) -> None:
+        if image_id in self.remove_image_fail:
+            raise RuntimeError(f"No such image: {image_id}")
         self.removed_images.append(image_id)
 
     def exec_run(self, container: Container, command: list[str]) -> tuple[int, bytes]:
@@ -514,6 +517,27 @@ def test_run_cleanup_removes_superseded_image() -> None:
 
     assert docker_client.removed_images == [container.image_id]
     assert session.updated
+
+
+def test_run_cleanup_logs_real_reason_when_removal_fails(caplog: Any) -> None:
+    # Regression test: a failed cleanup used to be logged with a hardcoded,
+    # often-wrong guess ("still in use?") regardless of what Docker actually
+    # said. On a containerd-image-store daemon, an image superseded by a
+    # same-tag rebuild can be auto-GC'd the moment its last container is
+    # removed -- genuinely gone, not "in use" -- so the log should surface
+    # Docker's real error instead of asserting a specific cause.
+    container = make_container("web", repo_digests=["myapp@sha256:old"])
+    docker_client = FakeDockerClient([container])
+    docker_client.remove_image_fail = {container.image_id}
+    registry_client = FakeRegistryClient({"myapp:latest": "sha256:new"})
+
+    with caplog.at_level("DEBUG"):
+        session = run(docker_client, registry_client, settings(cleanup=True))
+
+    assert docker_client.removed_images == []
+    assert session.updated
+    assert f"No such image: {container.image_id}" in caplog.text
+    assert "still in use" not in caplog.text
 
 
 def test_run_warns_when_stale_targets_netns_dependent_is_filtered_out(caplog: Any) -> None:
