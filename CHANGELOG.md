@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Docker image now builds on `python:3.12-alpine` instead of `python:3.12-slim`, roughly halving
+  the published image size (207MB -> 105MB).
+
+### Fixed
+
+- `--cleanup`'s image-removal failures were logged with a hardcoded, often-wrong guess ("still in
+  use?") regardless of what Docker actually reported. Now logs Docker's real error instead.
+
 ## [1.0.1] - 2026-07-17
 
 ### Fixed
