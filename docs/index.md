@@ -1,13 +1,12 @@
 # lookout
 
-lookout monitors your running Docker containers and watches for changes to the images those
-containers were started from. If lookout detects that a container's image has a newer digest
-available in the registry, it pulls the new image and recreates the container with the same
-runtime configuration (mounts, networks, environment, restart policy, healthcheck, etc.) it had
-before.
+lookout monitors your running Docker containers. It watches each container's image for a new
+digest in the registry. When a container's image is out of date, lookout pulls the new image and
+recreates the container with the same runtime configuration: mounts, networks, environment,
+restart policy, health check, and more.
 
-It's a Python reimplementation of [Watchtower](https://github.com/containrrr/watchtower)'s core
-update loop — see the [Limitations](limitations.md) page for what's deliberately not included in v1.
+lookout is a Python reimplementation of [Watchtower](https://github.com/containrrr/watchtower)'s
+core update loop. See the [Limitations](limitations.md) page for the features left out of v1.
 
 ## Quick start
 
@@ -30,11 +29,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
 
-By default lookout monitors every running container and polls every 5 minutes
-(`LOOKOUT_INTERVAL_SECONDS`, default `300`). Use `--include`/`--exclude` or labels to narrow that
-down — see [Container selection](container-selection.md).
+By default, lookout monitors every running container and polls every 5 minutes
+(`LOOKOUT_INTERVAL_SECONDS`, default `300`). Use `--include`/`--exclude` or labels to narrow the
+scope. See [Container selection](container-selection.md).
 
-To run a single check-and-update pass instead of running as a daemon:
+To run a single check-and-update pass instead of a daemon, add `--run-once`:
 
 ```bash
 docker run --rm \
@@ -42,7 +41,7 @@ docker run --rm \
   garage1118/lookout:latest --run-once --log-level DEBUG
 ```
 
-To build from source instead (e.g. for development):
+To build from source instead, for example during development:
 
 ```bash
 docker build -t lookout .

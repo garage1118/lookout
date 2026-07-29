@@ -14,20 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- `--cleanup`'s image-removal failures were logged with a hardcoded, often-wrong guess ("still in
-  use?") regardless of what Docker actually reported. Now logs Docker's real error instead.
+- `--cleanup`'s image-removal failures used to be logged with a hardcoded, often-wrong guess
+  ("still in use?"), regardless of what Docker actually reported. lookout now logs Docker's real
+  error instead.
 
 ## [1.0.1] - 2026-07-17
 
 ### Fixed
 
-- A container lookout successfully updated could become permanently stuck skipped with
-  `"no tagged image name"` on every later poll — the replacement was being created from the
+- A container lookout successfully updated could become permanently stuck, skipped with
+  `"no tagged image name"` on every later poll. lookout was creating the replacement from the
   resolved image id instead of its tag, which left `Config.Image` looking untagged from then on.
-- `--include` now works for containers that can't practically be labeled (e.g. Portainer stacks),
-  even when `--label-enable` scope is on — an explicitly named `--include` container bypasses the
-  label-enable gate specifically, without affecting an explicit disable or any other container's
-  scope.
+- `--include` now works for containers that cannot practically be labeled (for example Portainer
+  stacks), even when `--label-enable` scope is on. An explicitly named `--include` container
+  bypasses the label-enable gate specifically, without affecting an explicit disable or any other
+  container's scope.
 - Recreating a container on one or more custom networks (including macvlan) no longer leaves
   `HostConfig.NetworkMode` stale at `bridge`, and no longer drops a pinned MAC address on any
   network beyond the first — every target network is now attached directly at container-create

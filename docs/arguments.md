@@ -1,9 +1,9 @@
 # Arguments
 
-Configuration is env-vars-first: every setting has a `LOOKOUT_*` environment variable, and most
-have a corresponding CLI flag that overrides it. A flag that isn't passed never touches the
-env-var-derived value — there's no way to "unset" an env var from the CLI, only to add an override
-on top of it.
+Configuration is env-vars-first. Every setting has a `LOOKOUT_*` environment variable, and most
+also have a matching CLI flag that overrides it. A flag you do not pass never touches the
+env-var-derived value. There is no way to "unset" an env var from the CLI — you can only add an
+override on top of it.
 
 List-valued environment variables (`LOOKOUT_INCLUDE_NAMES`, `LOOKOUT_EXCLUDE_NAMES`,
 `LOOKOUT_NOTIFICATION_URLS`) take a **comma-separated string**, not a JSON array:
@@ -41,7 +41,7 @@ Only monitor containers with this name. Repeatable.
             Argument: --include (repeatable)
 Environment Variable: LOOKOUT_INCLUDE_NAMES
                 Type: Comma-separated string
-             Default: (empty; monitor all containers)
+             Default: (empty — monitors all containers)
 ```
 
 ## Exclude
@@ -69,9 +69,9 @@ Environment Variable: LOOKOUT_LABEL_ENABLE
 
 ## Cleanup
 
-Best-effort removal of an image after the container using it has been successfully recreated onto
-a newer one. If the old image is still referenced by something else, removal is silently skipped
-rather than erroring — see [Limitations](limitations.md).
+Best-effort removal of an image after lookout successfully recreates its container onto a newer
+one. If something else still references the old image, lookout silently skips the removal instead
+of raising an error. See [Limitations](limitations.md).
 
 ```text
             Argument: --cleanup
@@ -82,9 +82,9 @@ Environment Variable: LOOKOUT_CLEANUP
 
 ## Monitor only
 
-Check for and report staleness, but never stop/recreate containers. Can also be set per-container
-with the `io.lookout.monitor-only` label — the two combine with OR, not override: if either the
-global flag or the label is set, that container is left alone.
+Check for and report staleness, but never stop or recreate containers. You can also set this
+per-container with the `io.lookout.monitor-only` label. The global flag and the label combine with
+OR, not override: if either one is set, lookout leaves that container alone.
 
 ```text
             Argument: --monitor-only
@@ -95,9 +95,9 @@ Environment Variable: LOOKOUT_MONITOR_ONLY
 
 ## No pull
 
-Never pull; recreate using whatever image is already present locally under that name/tag. Useful
-if something else (e.g. a CI job) is responsible for pulling. Can also be set per-container with
-the `io.lookout.no-pull` label (same OR-combination as monitor-only).
+Never pull. Recreate using whatever image is already present locally under that name and tag. This
+is useful if something else, for example a CI job, is responsible for pulling. You can also set
+this per-container with the `io.lookout.no-pull` label (same OR-combination as monitor-only).
 
 ```text
             Argument: --no-pull
@@ -108,9 +108,9 @@ Environment Variable: LOOKOUT_NO_PULL
 
 ## Docker host
 
-Docker daemon to connect to. If omitted, the `docker` SDK's own defaults apply, which already
-honor the standard `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, and `DOCKER_CERT_PATH` environment
-variables — so remote hosts and TLS work without a dedicated lookout flag for either.
+Docker daemon to connect to. If omitted, the `docker` SDK's own defaults apply. Those defaults
+already honor the standard `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, and `DOCKER_CERT_PATH` environment
+variables, so remote hosts and TLS work without a dedicated lookout flag for either.
 
 ```text
             Argument: --docker-host
@@ -130,8 +130,8 @@ Environment Variable: LOOKOUT_LOG_LEVEL
 
 ## Stop timeout
 
-Seconds to wait for a container to stop gracefully before Docker forces it. Env-var only; no CLI
-flag currently exposes it.
+Seconds to wait for a container to stop gracefully before Docker forces it. This is an env-var-only
+setting. No CLI flag currently exposes it.
 
 ```text
             Argument: N/A
@@ -142,14 +142,14 @@ Environment Variable: LOOKOUT_STOP_TIMEOUT_SECONDS
 
 ## Notification URLs
 
-[Apprise](https://github.com/caronc/apprise) service URLs to send the run summary to. Env-var
-only; no CLI flag currently exposes it. See [Notifications](notifications.md).
+[Apprise](https://github.com/caronc/apprise) service URLs to send the run summary to. This is an
+env-var-only setting. No CLI flag currently exposes it. See [Notifications](notifications.md).
 
 ```text
             Argument: N/A
 Environment Variable: LOOKOUT_NOTIFICATION_URLS
                 Type: Comma-separated string of Apprise service URLs
-             Default: (empty; no notifications sent)
+             Default: (empty — sends no notifications)
 ```
 
 ## Notify only on change
@@ -178,13 +178,13 @@ Environment Variable: LOOKOUT_NOTIFY_ON_STARTUP
 
 ## Registry host / username / password
 
-A single fallback credential pair for one private registry, tried only for images on
-`LOOKOUT_REGISTRY_HOST` when `config.json` has no matching entry (or there's no `config.json` at
-all). `LOOKOUT_REGISTRY_HOST` is required for the other two to have any effect — without it the
-credentials are never used, rather than being sent to every registry with no config.json entry
-(which would break anonymous access to public images on unrelated registries). Env-var only —
-putting a password on the CLI would leak it into shell history and `ps` output. See
-[Private registries](private-registries.md).
+A single fallback credential pair for one private registry. lookout tries it only for images on
+`LOOKOUT_REGISTRY_HOST`, and only when `config.json` has no matching entry (or there is no
+`config.json` at all). `LOOKOUT_REGISTRY_HOST` is required for the other two variables to have any
+effect. Without it, lookout never uses the credentials — it does not send them to every registry
+that lacks a config.json entry, which would break anonymous access to public images on unrelated
+registries. This is an env-var-only setting: putting a password on the CLI would leak it into shell
+history and `ps` output. See [Private registries](private-registries.md).
 
 ```text
             Argument: N/A
