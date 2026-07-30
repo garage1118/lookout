@@ -12,16 +12,16 @@ container, and a container must pass all of them to be monitored:
 ## Self-exemption
 
 lookout never targets its own container. This holds even if the container would otherwise match
-every inclusion rule (no disable label, on an `--include` list, and so on), and you cannot
-override it. Stopping itself to recreate itself is inherently risky: if the recreate fails
-partway through, nothing is left running to retry it.
+every inclusion rule — no disable label, on an `--include` list, and so on. You cannot override
+it. Stopping itself to recreate itself is inherently risky: if the recreate fails partway through,
+nothing is left running to retry it.
 
 lookout detects its own container id from `/proc/self/mountinfo`'s `/etc/hostname` bind-mount
 source. Docker always sets that source to `/var/lib/docker/containers/<real-id>/hostname` on the
-host. lookout deliberately avoids `$HOSTNAME` for this, because `$HOSTNAME` reflects whatever
-`--hostname` was set to (or left at Docker's default), and stack/Compose deployments often pin an
-explicit hostname unrelated to the container's actual id. lookout falls back to `$HOSTNAME` only as
-a last resort, when `/proc` is not available at all (for example, not running on Linux).
+host. lookout deliberately avoids `$HOSTNAME` for this. `$HOSTNAME` reflects whatever `--hostname`
+was set to, or left at Docker's default. Stack/Compose deployments often pin an explicit hostname
+unrelated to the container's actual id. lookout falls back to `$HOSTNAME` only as a last resort,
+when `/proc` is not available at all (for example, not running on Linux).
 
 ## Disable via label
 
@@ -41,7 +41,7 @@ services:
 ## Label enable (opt-in scope)
 
 To monitor only containers that explicitly opt in, pass `--label-enable` (or set
-`LOOKOUT_LABEL_ENABLE=true`) on lookout, and set `io.lookout.enable=true` on each container you
+`LOOKOUT_LABEL_ENABLE=true`) on lookout. Then set `io.lookout.enable=true` on each container you
 want it to watch:
 
 ```bash
@@ -75,7 +75,7 @@ strings). Exclude always wins: a name in both lists is excluded.
 
 Avoid filtering out a container that shares its network namespace with a monitored one
 (`--net=container:<name>`, see [Linked containers](linked-containers.md)). lookout only stops and
-recreates containers it actually monitors, so it cannot cascade a filtered-out network-mode
+recreates containers it actually monitors. So it cannot cascade a filtered-out network-mode
 dependent into the same-run recreate the way it would an in-scope one. That dependent's
 `container:<name>` reference goes stale the next time the target is recreated. lookout logs a
 warning when it detects this — a stale target with a filtered-out dependent — but the only fix is
@@ -84,7 +84,8 @@ to include the dependent too.
 ## Monitor only
 
 Individual containers can be marked to be checked and reported on, but never actually
-stopped/recreated:
+stopped/recreated. Use this for a container you want visibility into without automatic changes —
+a database you would rather update by hand, for example:
 
 ```bash
 docker run -d --label io.lookout.monitor-only=true someimage
@@ -98,5 +99,7 @@ Watchtower has one.
 ## No pull
 
 Similarly, `io.lookout.no-pull=true` on a container means lookout recreates it from whatever image
-is already cached locally, instead of pulling. This applies to that one container, with the same
+is already cached locally, instead of pulling. Use this when something else already puts the new
+image on the host. Two examples: a CI job that pulls it, or an image built directly on the Docker
+host and never pushed to a registry at all. This applies to that one container, with the same
 OR-combination against the global `--no-pull`/`LOOKOUT_NO_PULL` flag.
