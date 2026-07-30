@@ -6,6 +6,13 @@ everything else that is out of scope or deliberately deferred without a planned 
 - **Cron-style scheduling.** Only plain interval polling (`--interval`/`LOOKOUT_INTERVAL_SECONDS`)
   is implemented today. `scheduler.py`'s `run_forever()` is written so a cron-based scheduler can
   replace its sleep loop later without touching the update logic itself.
+- **Per-registry poll interval.** Today a single `--interval`/`LOOKOUT_INTERVAL_SECONDS` value
+  applies to every container's registry check, regardless of which registry it comes from. A
+  separate, faster interval for one registry would let lookout notice a fresh push there sooner. A
+  private registry under active development is the typical case, while other registries such as
+  Docker Hub stay on the slower default. This would need per-registry scheduling state, not just a
+  second interval value — `scheduler.py`'s single sleep loop assumes one cadence for every
+  container today.
 - **`--health-check` mode**, for use as a container `HEALTHCHECK` command.
 - **Registry credential helper support** (`credHelpers`/`credsStore` in `config.json`), for
   example for GCR/ECR. `registry/auth.py`'s `resolve_auth()` only reads the plain `auths` section
