@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   container that carries the label at all, assuming another, scoped instance owns it — no
   `--scope=none` opt-in required. An explicit `--include` entry bypasses the scope gate, same as
   it already does for `--label-enable`.
+- Notification titles now include the scope (e.g. `lookout run summary [dev]`) when `--scope` is
+  set, so several scoped instances sharing one notification target stay distinguishable.
 
 ## [1.0.2] - 2026-07-21
 
