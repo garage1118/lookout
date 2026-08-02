@@ -17,10 +17,11 @@ def apply(
 ) -> list[Container]:
     """Include/exclude by name, enable-label scope, --scope, and disabled-via-label.
 
-    Order: self-exemption (absolute, see below), then disabled-via-label,
-    then --label-enable scope (bypassed by an explicit --include, see
-    below), then --scope (also bypassed by an explicit --include), then
-    name include list, then name exclude list (exclude always wins last).
+    Order: self-exemption (absolute, see below), then sibling-lookout
+    exemption (also absolute), then disabled-via-label, then --label-enable
+    scope (bypassed by an explicit --include, see below), then --scope (also
+    bypassed by an explicit --include), then name include list, then name
+    exclude list (exclude always wins last).
     """
     if own_container_id is None:
         own_container_id = _detect_own_container_id()
@@ -31,6 +32,20 @@ def apply(
             # Never let lookout target its own container, deliberately not
             # overridable via --include: stopping itself to recreate itself
             # could leave nothing running to complete or retry the update.
+            continue
+        if container.is_lookout_instance():
+            # Never let one lookout instance manage another, deliberately
+            # not overridable via --include. Self-exemption above only
+            # protects an instance from *itself* -- without this, splitting
+            # containers across several lookout instances via --scope means
+            # each instance would otherwise treat every other instance's own
+            # container as fair game to monitor and recreate, entirely by
+            # accident (caught live: an unscoped instance found a scoped
+            # sibling's container, tried to check it for updates, and only
+            # failed to act on it because the sibling's pinned image tag
+            # happened to 404). Detected from the container's actual
+            # ENTRYPOINT rather than a label, so it can't be missed by
+            # forgetting to set one on a newly deployed sibling.
             continue
         if not container.is_monitored():
             continue

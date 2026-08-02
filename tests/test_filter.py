@@ -6,7 +6,10 @@ from lookout.docker.container import ENABLE_LABEL, SCOPE_LABEL, Container
 
 
 def make_container(
-    name: str, labels: dict[str, str] | None = None, container_id: str | None = None
+    name: str,
+    labels: dict[str, str] | None = None,
+    container_id: str | None = None,
+    entrypoint: list[str] | None = None,
 ) -> Container:
     return Container(
         id=container_id or f"id-{name}",
@@ -14,7 +17,7 @@ def make_container(
         image_id="sha256:x",
         image_name="myapp:latest",
         labels=labels or {},
-        inspect={},
+        inspect={"Config": {"Entrypoint": entrypoint}} if entrypoint else {},
     )
 
 
@@ -164,6 +167,25 @@ def test_self_exemption_noop_without_a_known_own_container_id(monkeypatch: Any) 
     result = apply(containers, settings(), own_container_id=None)
 
     assert {c.name for c in result} == {"lookout", "web"}
+
+
+def test_sibling_lookout_instance_excluded() -> None:
+    containers = [
+        make_container("lookout-fast", entrypoint=["lookout"]),
+        make_container("web"),
+    ]
+
+    result = apply(containers, settings())
+
+    assert [c.name for c in result] == ["web"]
+
+
+def test_sibling_lookout_instance_not_overridable_by_include() -> None:
+    containers = [make_container("lookout-fast", entrypoint=["lookout"])]
+
+    result = apply(containers, settings(include_names=["lookout-fast"]))
+
+    assert result == []
 
 
 def test_parse_own_container_id_from_real_mountinfo_line() -> None:

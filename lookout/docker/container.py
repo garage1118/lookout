@@ -57,6 +57,16 @@ class Container:
     def is_no_pull(self) -> bool:
         return self.labels.get(NO_PULL_LABEL, "false").lower() == "true"
 
+    def is_lookout_instance(self) -> bool:
+        """True if this container is itself running lookout, regardless of
+        image name, tag, or registry -- lookout's own Dockerfile always sets
+        `ENTRYPOINT ["lookout"]`, an unfakeable runtime fact `docker inspect`
+        reports directly, unlike a label an operator has to remember to set
+        on every lookout container they deploy. Used so several lookout
+        instances split by --scope never end up monitoring each other."""
+        entrypoint = (self.inspect.get("Config") or {}).get("Entrypoint")
+        return entrypoint == ["lookout"]
+
     def scope(self) -> str | None:
         """The io.lookout.scope label's value, or None if unset/empty -- lets
         several independent lookout instances split a daemon's containers

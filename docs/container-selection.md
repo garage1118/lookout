@@ -1,14 +1,15 @@
 # Container selection
 
-By default, lookout monitors every running container except itself. Five rules can exclude a
-container, and a container must pass all of them to be monitored:
+By default, lookout monitors every running container except itself and any other lookout instance.
+Six rules can exclude a container, and a container must pass all of them to be monitored:
 
 0. **Self-exemption** — always applies. Not configurable. See below.
-1. **Disable via label** — always applies.
-2. **`--label-enable` scope** — off by default. When on, only explicitly-enabled containers
+1. **Sibling-lookout exemption** — always applies. Not configurable. See below.
+2. **Disable via label** — always applies.
+3. **`--label-enable` scope** — off by default. When on, only explicitly-enabled containers
    qualify, unless the container is explicitly named in `--include` (see below).
-3. **`--scope`** — off by default. See below.
-4. **`--include`/`--exclude` by name** — exclude always wins.
+4. **`--scope`** — off by default. See below.
+5. **`--include`/`--exclude` by name** — exclude always wins.
 
 ## Self-exemption
 
@@ -23,6 +24,19 @@ host. lookout deliberately avoids `$HOSTNAME` for this. `$HOSTNAME` reflects wha
 was set to, or left at Docker's default. Stack/Compose deployments often pin an explicit hostname
 unrelated to the container's actual id. lookout falls back to `$HOSTNAME` only as a last resort,
 when `/proc` is not available at all (for example, not running on Linux).
+
+## Sibling-lookout exemption
+
+lookout never targets *any* lookout container, not just its own. This matters once you run several
+instances split by `--scope` — without it, each instance would treat every other instance's own
+container as fair game to monitor and, if a newer image ever resolved, stop and recreate. Like
+self-exemption, this cannot be overridden by `--include`.
+
+Detection does not rely on a label, an image name, a tag, or a registry — all things an operator
+could forget to set on a newly deployed sibling. Instead, lookout checks the container's actual
+`ENTRYPOINT`, which every real lookout image sets to `["lookout"]`. Any container `docker inspect`
+reports with that exact entrypoint is treated as a lookout instance, automatically, with nothing to
+configure.
 
 ## Disable via label
 

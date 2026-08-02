@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Several lookout instances running on the same daemon (e.g. split by `--scope`) could end up
+  monitoring *each other*'s own containers, since self-exemption only protects an instance from
+  itself. lookout now also excludes any container that is itself a lookout instance, detected from
+  its `ENTRYPOINT` rather than a label or image name, so this can't happen regardless of how the
+  other instance was deployed or labeled.
+
 ## [1.1.0] - 2026-08-02
 
 ### Added

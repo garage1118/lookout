@@ -37,7 +37,7 @@ Data flow for one run (`core/updater.py:run`):
 
 ```
 docker_client.list_containers()
-  -> core/filter.apply()          # self-exemption, name include/exclude, label-enable scope, --scope, disable-label
+  -> core/filter.apply()          # self-exemption, sibling-lookout exemption, name include/exclude, label-enable scope, --scope, disable-label
   -> for each: registry.get_latest_digest() vs core/updater._is_stale()
   -> core/updater.stop_order()    # dependents before dependencies
   -> lifecycle.pre_update() + docker_client.stop()      in stop_order
@@ -105,7 +105,15 @@ Each module's job:
   its hostname was stale from an earlier deployment). Instead it reads `/proc/self/mountinfo`'s
   `/etc/hostname` bind-mount source, which Docker always sets to
   `/var/lib/docker/containers/<real-id>/hostname` regardless of any hostname override; `$HOSTNAME`
-  is only a last-resort fallback if `/proc` isn't available at all. An explicit `--include` entry
+  is only a last-resort fallback if `/proc` isn't available at all. Also unconditionally excludes
+  *any* lookout instance, not just its own container — not overridable by `--include`, same
+  rationale as self-exemption. `Container.is_lookout_instance()` detects this from the container's
+  actual `ENTRYPOINT` (`["lookout"]`, set by the Dockerfile) rather than a label, image name, or
+  tag — nothing an operator has to remember to set on a newly deployed sibling, and it can't drift
+  out of sync the way a hand-maintained `--exclude` list could (caught live: `lookout-slow`, an
+  unscoped instance, found `lookout-fast`'s own container un-labeled and tried to check it for
+  updates — harmless only because the pinned tag it was running happened to 404 first). An explicit
+  `--include` entry
   bypasses the `--label-enable` scope gate and the `--scope` gate (though not an explicit
   `io.lookout.enable=false` disable, nor monitor-only/no-pull, which stay in effect regardless of
   how a container entered scope) — some deployment tools (Portainer stacks in particular) make it
@@ -117,9 +125,9 @@ Each module's job:
   scoped instance owns it. That "ignore anything scoped" default has no opt-in, unlike Watchtower's
   `--scope none` — an unscoped instance silently double-processing a scoped container is a footgun
   worth closing by default rather than requiring every general-purpose instance to remember an
-  extra flag. Unlike Watchtower, lookout also does not try to detect or stop sibling instances in
-  other scopes (Watchtower's `CheckForMultipleWatchtowerInstances` kills all but the most recently
-  started one) — scoping here is purely cooperative, not competitive. `notifications/notify.py`'s
+  extra flag. Unlike Watchtower, lookout's sibling detection only ever excludes, never manages or
+  stops another instance (Watchtower's `CheckForMultipleWatchtowerInstances` kills all but the most
+  recently started one) — scoping here is purely cooperative, not competitive. `notifications/notify.py`'s
   `send()`/`send_startup()` append `[scope]` to the notification title when `settings.scope` is
   set, so several scoped instances sharing one notification target (e.g. one Telegram bot) produce
   distinguishable messages instead of identical ones.

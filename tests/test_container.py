@@ -28,6 +28,37 @@ def test_is_monitor_only_defaults_false() -> None:
     assert container.is_monitor_only() is False
 
 
+def test_is_lookout_instance_true_for_lookout_entrypoint() -> None:
+    container = Container.from_inspect(
+        {
+            "Id": "x",
+            "Name": "/lookout-fast",
+            "Image": "sha256:x",
+            "Config": {"Image": "garage1118/lookout:1.1.0", "Entrypoint": ["lookout"]},
+        }
+    )
+    assert container.is_lookout_instance() is True
+
+
+def test_is_lookout_instance_false_for_other_containers() -> None:
+    container = Container.from_inspect(
+        {
+            "Id": "x",
+            "Name": "/web",
+            "Image": "sha256:x",
+            "Config": {"Image": "myapp:latest", "Entrypoint": ["myapp"]},
+        }
+    )
+    assert container.is_lookout_instance() is False
+
+
+def test_is_lookout_instance_false_when_no_entrypoint() -> None:
+    container = Container.from_inspect(
+        {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}}
+    )
+    assert container.is_lookout_instance() is False
+
+
 def test_scope_defaults_none() -> None:
     container = Container.from_inspect(
         {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}}
