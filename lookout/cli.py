@@ -50,6 +50,12 @@ def _split_names(values: tuple[str, ...]) -> list[str]:
     help="Only monitor containers with the enable label set to true",
 )
 @click.option(
+    "--scope",
+    default=None,
+    help="Only monitor containers whose io.lookout.scope label matches this value; unset "
+    "containers with a different scope label are left for another lookout instance",
+)
+@click.option(
     "--cleanup", is_flag=True, default=None, help="Remove dangling images after a successful update"
 )
 @click.option(
@@ -81,6 +87,7 @@ def main(
     include_names: tuple[str, ...],
     exclude_names: tuple[str, ...],
     label_enable: bool | None,
+    scope: str | None,
     cleanup: bool | None,
     monitor_only: bool | None,
     no_pull: bool | None,
@@ -99,6 +106,8 @@ def main(
         settings.exclude_names = _split_names(exclude_names)
     if label_enable is not None:
         settings.label_enable = label_enable
+    if scope is not None:
+        settings.scope = scope
     if cleanup is not None:
         settings.cleanup = cleanup
     if monitor_only is not None:

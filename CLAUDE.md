@@ -37,7 +37,7 @@ Data flow for one run (`core/updater.py:run`):
 
 ```
 docker_client.list_containers()
-  -> core/filter.apply()          # self-exemption, name include/exclude, label-enable scope, disable-label
+  -> core/filter.apply()          # self-exemption, name include/exclude, label-enable scope, --scope, disable-label
   -> for each: registry.get_latest_digest() vs core/updater._is_stale()
   -> core/updater.stop_order()    # dependents before dependencies
   -> lifecycle.pre_update() + docker_client.stop()      in stop_order
@@ -54,8 +54,8 @@ Each module's job:
 - **`docker/container.py`** — `Container` domain model wrapping a raw `docker inspect` payload plus
   a separately-populated `repo_digests` list (from the *image*, not the container, inspect —
   `DockerPyClient.list_containers()` fetches it). Label constants live here:
-  `io.lookout.enable` / `.monitor-only` / `.no-pull` / `.depends-on` (deliberately **not**
-  Watchtower's `com.centurylinklabs.watchtower.*` — this project doesn't aim for label
+  `io.lookout.enable` / `.monitor-only` / `.no-pull` / `.depends-on` / `.scope` (deliberately
+  **not** Watchtower's `com.centurylinklabs.watchtower.*` — this project doesn't aim for label
   compatibility). `has_digest()` is a *fast-path-only* check against `repo_digests` — `False` does
   **not** mean stale. Docker clears an image's `RepoDigests` whenever its tag gets locally
   reassigned to a different image (e.g. `docker build -t`/`docker pull` of the same tag by anything
@@ -93,7 +93,7 @@ Each module's job:
 - **`registry/auth.py`** — reads `~/.docker/config.json`'s plain `auths` section (what
   `docker login` writes). Does **not** shell out to `credHelpers`/`credsStore` binaries; returns
   `None` in that case and the caller falls back to anonymous access.
-- **`core/filter.py`** — inclusion only (name include/exclude, `--label-enable` scope,
+- **`core/filter.py`** — inclusion only (name include/exclude, `--label-enable` scope, `--scope`,
   disable-via-label). Monitor-only / no-pull are *not* filtered out here — they're read per-container
   in `updater.py` via `Container.is_monitor_only()` / `is_no_pull()` combined with the matching
   global `Settings` flag, since those containers still need to be checked and reported, just not
@@ -106,11 +106,20 @@ Each module's job:
   `/etc/hostname` bind-mount source, which Docker always sets to
   `/var/lib/docker/containers/<real-id>/hostname` regardless of any hostname override; `$HOSTNAME`
   is only a last-resort fallback if `/proc` isn't available at all. An explicit `--include` entry
-  bypasses the `--label-enable` scope gate (though not an explicit `io.lookout.enable=false`
-  disable, nor monitor-only/no-pull, which stay in effect regardless of how a container entered
-  scope) — some deployment tools (Portainer stacks in particular) make it impractical to attach a
-  custom label at all, and without this a container like that could never be reached under
-  `--label-enable` scope no matter what.
+  bypasses the `--label-enable` scope gate and the `--scope` gate (though not an explicit
+  `io.lookout.enable=false` disable, nor monitor-only/no-pull, which stay in effect regardless of
+  how a container entered scope) — some deployment tools (Portainer stacks in particular) make it
+  impractical to attach a custom label at all, and without this a container like that could never
+  be reached under `--label-enable` scope no matter what. `--scope` (`io.lookout.scope` label,
+  `Container.scope()`) lets several independent lookout instances split one daemon's containers
+  between them: a scoped instance only matches containers labeled with its exact scope value, and
+  an *unscoped* instance ignores any container that carries the label at all, assuming some other,
+  scoped instance owns it. That "ignore anything scoped" default has no opt-in, unlike Watchtower's
+  `--scope none` — an unscoped instance silently double-processing a scoped container is a footgun
+  worth closing by default rather than requiring every general-purpose instance to remember an
+  extra flag. Unlike Watchtower, lookout also does not try to detect or stop sibling instances in
+  other scopes (Watchtower's `CheckForMultipleWatchtowerInstances` kills all but the most recently
+  started one) — scoping here is purely cooperative, not competitive.
 - **`core/updater.py`** — orchestration. `_is_stale()` is the real staleness check: it trusts
   `Container.has_digest()` when it says fresh, but when that comes back `False` it falls back to
   `DockerClient.find_local_image_id()` (looks up whatever local image currently carries the

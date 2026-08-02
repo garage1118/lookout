@@ -10,12 +10,20 @@ everything else that is out of scope or deliberately deferred without a planned 
   applies to every container's registry check, regardless of which registry it comes from. A
   separate, faster interval for one registry would let lookout notice a fresh push there sooner. A
   private registry under active development is the typical case, while other registries such as
-  Docker Hub stay on the slower default. This would need per-registry scheduling state, not just a
-  second interval value — `scheduler.py`'s single sleep loop assumes one cadence for every
-  container today. Same underlying shape as the registry-credential fallback below — both are
-  really "a table of per-registry-host overrides," just with different fields (interval vs.
-  username/password). Whichever gets built first should land as one general host-keyed override
-  structure with optional fields, not two separate bespoke ones.
+  Docker Hub stay on the slower default. This does not need a `scheduler.py` rewrite or an
+  independent per-registry scheduling loop (no cron involved): keep the single global tick running
+  at the fastest cadence any registry wants, and gate the actual per-container registry check in
+  `core/updater.py` against a small host-keyed table of minimum-interval + last-checked-at,
+  defaulting to always-due (today's behavior) for any host without an override. A throttled
+  container is simply not reconsidered on a tick it isn't due for yet — indistinguishable from "not
+  currently stale," so this doesn't complicate `stop_order()`'s single coordinated batch per pass.
+  Same flat host-keyed shape as the registry-credential fallback below, just with an interval field
+  instead of username/password. Until this exists, running two lookout instances — a fast one and a
+  default-interval one, split by `--scope` (implemented — see
+  [Container selection](docs/container-selection.md#scope-split-a-daemon-between-several-instances))
+  — gets the same result today with zero new code, and without the earlier `--include`/`--exclude`
+  workaround's failure mode of the two lists silently drifting out of sync as containers are added
+  or removed.
 - **`--health-check` mode**, for use as a container `HEALTHCHECK` command. Watchtower's version
   (`cmd/root.go`) is a no-op that just `os.Exit(0)`s — it proves a second process can still spawn
   in the container's namespace, nothing about whether the main loop is actually alive or stuck; not
@@ -32,9 +40,9 @@ everything else that is out of scope or deliberately deferred without a planned 
   authenticate (AWS credentials for ECR, a GPG keyring for `pass`, etc.), would all need to live
   inside lookout's own container, not just on the host. A cheaper partial alternative: extend the
   existing `LOOKOUT_REGISTRY_HOST`/`USERNAME`/`PASSWORD` fallback (currently a single credential
-  triple, scoped to one registry) into a list of triples, one per registry — the same host-keyed
-  override table the per-registry poll interval item above needs, just with username/password
-  fields instead of (or alongside) an interval field. That's a small, self-contained change with no
+  triple, scoped to one registry) into a list of triples, one per registry — the same flat
+  host-keyed shape the per-registry poll interval item above needs, just with username/password
+  fields instead of an interval field. That's a small, self-contained change with no
   new toolchain baked into the image, and it fully covers any
   registry whose credentials don't expire (Docker Hub, GHCR, self-hosted basic auth, GCR via a
   `_json_key` service-account key). It does not help ECR, though — the underlying problem there

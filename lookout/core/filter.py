@@ -15,12 +15,12 @@ def apply(
     settings: Settings,
     own_container_id: str | None = None,
 ) -> list[Container]:
-    """Include/exclude by name, enable-label scope, and disabled-via-label.
+    """Include/exclude by name, enable-label scope, --scope, and disabled-via-label.
 
     Order: self-exemption (absolute, see below), then disabled-via-label,
     then --label-enable scope (bypassed by an explicit --include, see
-    below), then name include list, then name exclude list (exclude always
-    wins last).
+    below), then --scope (also bypassed by an explicit --include), then
+    name include list, then name exclude list (exclude always wins last).
     """
     if own_container_id is None:
         own_container_id = _detect_own_container_id()
@@ -51,6 +51,23 @@ def apply(
             # this function stay in full effect regardless of how a
             # container entered scope.
             continue
+        container_scope = container.scope()
+        if not explicitly_included:
+            if settings.scope:
+                if container_scope != settings.scope:
+                    # A configured scope only picks up containers explicitly
+                    # tagged with that exact value -- an unscoped container
+                    # is left for whatever instance is running without a
+                    # --scope of its own, same as Watchtower's convention.
+                    continue
+            elif container_scope:
+                # No scope configured on this instance: assume any container
+                # that *does* carry a scope label belongs to some other,
+                # scoped lookout instance, and leave it alone. Unlike
+                # Watchtower, this is the default with no --scope=none opt-in
+                # needed -- an unscoped instance silently double-processing a
+                # scoped container is a footgun worth closing by default.
+                continue
         if settings.include_names and not explicitly_included:
             continue
         if container.name in settings.exclude_names:

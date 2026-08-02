@@ -1,13 +1,14 @@
 # Container selection
 
-By default, lookout monitors every running container except itself. Four rules can exclude a
+By default, lookout monitors every running container except itself. Five rules can exclude a
 container, and a container must pass all of them to be monitored:
 
 0. **Self-exemption** — always applies. Not configurable. See below.
 1. **Disable via label** — always applies.
 2. **`--label-enable` scope** — off by default. When on, only explicitly-enabled containers
    qualify, unless the container is explicitly named in `--include` (see below).
-3. **`--include`/`--exclude` by name** — exclude always wins.
+3. **`--scope`** — off by default. See below.
+4. **`--include`/`--exclude` by name** — exclude always wins.
 
 ## Self-exemption
 
@@ -62,6 +63,36 @@ and monitor-only/no-pull both still apply, regardless of how a container entered
 ```bash
 lookout --label-enable --include hard-to-label-container
 ```
+
+## Scope (split a daemon between several instances)
+
+`--scope`/`LOOKOUT_SCOPE` splits one Docker daemon's containers between several independent
+lookout instances, each responsible for a different subset. Tag the containers one instance should
+own with `io.lookout.scope`, and pass the matching value to that instance:
+
+```bash
+docker run -d --label io.lookout.scope=dev someimage
+```
+
+```bash
+lookout --scope dev
+```
+
+An instance with `--scope` set only monitors containers whose `io.lookout.scope` label matches
+that exact value — an unscoped container, or one tagged with a different scope, is left alone. An
+instance with no `--scope` set does the opposite: it ignores any container that carries the scope
+label at all, on the assumption that some other, scoped instance owns it, and monitors everything
+else as usual. You do not need to opt into that behavior — it is the default the moment any
+container anywhere is scope-labeled.
+
+Naming a scoped container explicitly in `--include` bypasses the scope gate for it specifically,
+the same way `--include` bypasses `--label-enable` scope. This is useful for a one-off check across
+scopes without changing either instance's `--scope` setting.
+
+This is how you run, for example, a fast-interval instance dedicated to one actively-developed
+private registry alongside a normal-interval instance for everything else, without hand-maintaining
+matching `--include`/`--exclude` lists across both — the scope label is the single source of truth
+for which instance owns a container.
 
 ## Include / exclude by name
 

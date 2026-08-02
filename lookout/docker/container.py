@@ -8,6 +8,7 @@ ENABLE_LABEL = "io.lookout.enable"
 MONITOR_ONLY_LABEL = "io.lookout.monitor-only"
 NO_PULL_LABEL = "io.lookout.no-pull"
 DEPENDS_ON_LABEL = "io.lookout.depends-on"
+SCOPE_LABEL = "io.lookout.scope"
 
 _IMAGE_ID_RE = re.compile(r"^(sha256:)?[0-9a-f]{64}$")
 
@@ -55,6 +56,13 @@ class Container:
 
     def is_no_pull(self) -> bool:
         return self.labels.get(NO_PULL_LABEL, "false").lower() == "true"
+
+    def scope(self) -> str | None:
+        """The io.lookout.scope label's value, or None if unset/empty -- lets
+        several independent lookout instances split a daemon's containers
+        between them. See core/filter.py for how a running instance's own
+        --scope setting matches against this."""
+        return self.labels.get(SCOPE_LABEL) or None
 
     def has_no_tagged_image_name(self) -> bool:
         """True if this container was started directly from an image id

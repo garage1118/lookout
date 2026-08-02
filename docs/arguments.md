@@ -72,6 +72,20 @@ Environment Variable: LOOKOUT_LABEL_ENABLE
              Default: false
 ```
 
+## Scope
+
+Only monitor containers whose `io.lookout.scope` label matches this value. When unset, ignore any
+container that has the scope label set at all, on the assumption that another lookout instance
+handles it. Lets several independent instances split a daemon's containers between them. See
+[Container selection](container-selection.md#scope-split-a-daemon-between-several-instances).
+
+```text
+            Argument: --scope
+Environment Variable: LOOKOUT_SCOPE
+                Type: String
+             Default: (unset — ignores any container with a scope label set)
+```
+
 ## Cleanup
 
 Best-effort removal of the old image after lookout successfully recreates its container onto a

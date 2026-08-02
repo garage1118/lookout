@@ -2,7 +2,7 @@ from typing import Any
 
 from lookout.config import Settings
 from lookout.core.filter import _parse_own_container_id, apply
-from lookout.docker.container import ENABLE_LABEL, Container
+from lookout.docker.container import ENABLE_LABEL, SCOPE_LABEL, Container
 
 
 def make_container(
@@ -92,6 +92,51 @@ def test_exclude_wins_over_include() -> None:
     result = apply(containers, settings(include_names=["a", "b"], exclude_names=["b"]))
 
     assert [c.name for c in result] == ["a"]
+
+
+def test_unscoped_instance_ignores_any_scoped_container() -> None:
+    # Default (no --scope set): assume a scoped container belongs to some
+    # other, scoped lookout instance and leave it alone -- no --scope=none
+    # opt-in needed, unlike Watchtower.
+    containers = [
+        make_container("plain"),
+        make_container("dev-scoped", {SCOPE_LABEL: "dev"}),
+    ]
+
+    result = apply(containers, settings())
+
+    assert [c.name for c in result] == ["plain"]
+
+
+def test_scoped_instance_only_matches_its_exact_scope() -> None:
+    containers = [
+        make_container("plain"),
+        make_container("dev-scoped", {SCOPE_LABEL: "dev"}),
+        make_container("prod-scoped", {SCOPE_LABEL: "prod"}),
+    ]
+
+    result = apply(containers, settings(scope="dev"))
+
+    assert [c.name for c in result] == ["dev-scoped"]
+
+
+def test_include_names_bypasses_scope_gate() -> None:
+    containers = [
+        make_container("dev-scoped", {SCOPE_LABEL: "dev"}),
+        make_container("plain"),
+    ]
+
+    result = apply(containers, settings(scope="prod", include_names=["dev-scoped"]))
+
+    assert [c.name for c in result] == ["dev-scoped"]
+
+
+def test_include_names_bypasses_scope_gate_when_unscoped_instance() -> None:
+    containers = [make_container("dev-scoped", {SCOPE_LABEL: "dev"})]
+
+    result = apply(containers, settings(include_names=["dev-scoped"]))
+
+    assert [c.name for c in result] == ["dev-scoped"]
 
 
 def test_self_exemption_excludes_own_container() -> None:

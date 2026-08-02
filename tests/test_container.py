@@ -28,6 +28,37 @@ def test_is_monitor_only_defaults_false() -> None:
     assert container.is_monitor_only() is False
 
 
+def test_scope_defaults_none() -> None:
+    container = Container.from_inspect(
+        {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}}
+    )
+    assert container.scope() is None
+
+
+def test_scope_returns_label_value() -> None:
+    container = Container.from_inspect(
+        {
+            "Id": "x",
+            "Name": "/x",
+            "Image": "sha256:x",
+            "Config": {"Labels": {"io.lookout.scope": "dev"}},
+        }
+    )
+    assert container.scope() == "dev"
+
+
+def test_scope_empty_label_treated_as_unset() -> None:
+    container = Container.from_inspect(
+        {
+            "Id": "x",
+            "Name": "/x",
+            "Image": "sha256:x",
+            "Config": {"Labels": {"io.lookout.scope": ""}},
+        }
+    )
+    assert container.scope() is None
+
+
 def test_has_digest_matches_known_repo_digest() -> None:
     container = Container.from_inspect(
         {"Id": "x", "Name": "/x", "Image": "sha256:x", "Config": {}},

@@ -89,6 +89,8 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
             "--monitor-only",
             "--no-pull",
             "--label-enable",
+            "--scope",
+            "dev",
             "--notify-only-on-change",
             "--notify-on-startup",
         ],
@@ -103,6 +105,7 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
     assert settings.monitor_only is True
     assert settings.no_pull is True
     assert settings.label_enable is True
+    assert settings.scope == "dev"
     assert settings.notify_only_on_change is True
     assert settings.notify_on_startup is True
 
@@ -129,6 +132,7 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
     assert settings.cleanup is False
     assert settings.monitor_only is False
     assert settings.include_names == []
+    assert settings.scope is None
     assert settings.notify_only_on_change is False
     assert settings.notify_on_startup is False
 

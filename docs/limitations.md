@@ -17,9 +17,10 @@ that touch them. This page lists both, so they are not mistaken for bugs.
   still monitored normally.
 - **HTTP API / webhook-triggered updates.** Watchtower can run in a mode where updates are only
   triggered by an HTTP request instead of polling. Not implemented.
-- **Multi-host / fleet management.** One lookout instance manages one Docker daemon.
-- **Running multiple scoped instances** (Watchtower's `--scope` label, for running several
-  independent Watchtowers against the same daemon). Not implemented.
+- **Multi-host / fleet management.** One lookout instance manages one Docker daemon. Running
+  several independent instances against the *same* daemon, each responsible for a different subset
+  of containers, is supported via `--scope` — see
+  [Container selection](container-selection.md#scope-split-a-daemon-between-several-instances).
 - **A Prometheus metrics endpoint.** Not implemented.
 - **`--health-check` mode** for use as a container `HEALTHCHECK` command. Not implemented — see
   the Roadmap doc in the repo root.

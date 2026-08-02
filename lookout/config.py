@@ -20,6 +20,14 @@ class Settings(BaseSettings):
         default=False, description="Only monitor containers with the enable label"
     )
 
+    scope: str | None = Field(
+        default=None,
+        description="Only monitor containers whose io.lookout.scope label matches this value. "
+        "When unset, ignore any container that has the scope label set at all, on the assumption "
+        "that another lookout instance handles it -- lets several independent instances split a "
+        "daemon's containers between them",
+    )
+
     cleanup: bool = Field(
         default=False, description="Remove dangling images after a successful update"
     )
