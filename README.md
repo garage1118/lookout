@@ -10,14 +10,16 @@ image digest, and recreate containers that are stale.
 
 ## Documentation
 
-- [docs/index.md](docs/index.md) — quick start (`docker run`/Compose) and full doc index
-- [docs/arguments.md](docs/arguments.md) — every CLI flag and `LOOKOUT_*` env var
-- [docs/container-selection.md](docs/container-selection.md) — include/exclude, monitor-only, no-pull
-- [docs/linked-containers.md](docs/linked-containers.md) — dependency-ordered stop/start
-- [docs/lifecycle-hooks.md](docs/lifecycle-hooks.md) — pre/post-update hooks
-- [docs/private-registries.md](docs/private-registries.md) — registry authentication
-- [docs/notifications.md](docs/notifications.md) — Apprise run-summary notifications
-- [docs/limitations.md](docs/limitations.md) — what's intentionally not implemented in v1
+Full documentation: **https://garage1118.github.io/lookout/**
+
+- [Quick start](https://garage1118.github.io/lookout/) — `docker run`/Compose and full doc index
+- [Arguments](https://garage1118.github.io/lookout/arguments/) — every CLI flag and `LOOKOUT_*` env var
+- [Container selection](https://garage1118.github.io/lookout/container-selection/) — include/exclude, monitor-only, no-pull
+- [Linked containers](https://garage1118.github.io/lookout/linked-containers/) — dependency-ordered stop/start
+- [Lifecycle hooks](https://garage1118.github.io/lookout/lifecycle-hooks/) — pre/post-update hooks
+- [Private registries](https://garage1118.github.io/lookout/private-registries/) — registry authentication
+- [Notifications](https://garage1118.github.io/lookout/notifications/) — Apprise run-summary notifications
+- [Limitations](https://garage1118.github.io/lookout/limitations/) — what's intentionally not implemented in v1
 - [ROADMAP.md](ROADMAP.md) — planned for a future release
 - [CHANGELOG.md](CHANGELOG.md) — release history
 
