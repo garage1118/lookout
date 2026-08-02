@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `--scope`/`LOOKOUT_SCOPE` lets several independent lookout instances split one Docker daemon's
+  containers between them. An instance with `--scope` set only monitors containers labeled
+  `io.lookout.scope` with that exact value; an instance with no `--scope` set ignores any
+  container that carries the label at all, assuming another, scoped instance owns it — no
+  `--scope=none` opt-in required. An explicit `--include` entry bypasses the scope gate, same as
+  it already does for `--label-enable`.
+
 ## [1.0.2] - 2026-07-21
 
 ### Changed
