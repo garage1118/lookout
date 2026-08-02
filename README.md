@@ -20,8 +20,8 @@ Full documentation: **https://garage1118.github.io/lookout/**
 - [Private registries](https://garage1118.github.io/lookout/private-registries/) — registry authentication
 - [Notifications](https://garage1118.github.io/lookout/notifications/) — Apprise run-summary notifications
 - [Limitations](https://garage1118.github.io/lookout/limitations/) — what's intentionally not implemented in v1
-- [ROADMAP.md](ROADMAP.md) — planned for a future release
-- [CHANGELOG.md](CHANGELOG.md) — release history
+- [ROADMAP.md](https://github.com/garage1118/lookout/blob/main/ROADMAP.md) — planned for a future release
+- [CHANGELOG.md](https://github.com/garage1118/lookout/blob/main/CHANGELOG.md) — release history
 
 ## Development
 
