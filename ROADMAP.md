@@ -53,7 +53,26 @@ everything else that is out of scope or deliberately deferred without a planned 
 - **Notification message templating.** `notify.send()` always ships a fixed plain-text summary
   (`session.summary()`) to every configured Apprise URL. There is no way to customize the body or
   title format, unlike Watchtower's Go-template support. See
-  [Notifications](docs/notifications.md#report-format).
+  [Notifications](docs/notifications.md#report-format). Watchtower renders a real `text/template`
+  (`pkg/notifications/shoutrrr.go`, `common_templates.go`) against a `Report` bucketed by outcome
+  (Scanned/Updated/Fresh/Failed/Skipped) plus a `Title`/`Host`, with the template string supplied
+  via `--notification-template`/`WATCHTOWER_NOTIFICATION_TEMPLATE` and a fixed built-in default if
+  unset — a `--notification-report` flag also toggles between that structured data and Watchtower's
+  older raw-log-line format, purely for backward compat with templates written before the Report
+  model existed. lookout has no such legacy format to preserve, so it wouldn't need that toggle at
+  all. For lookout, Jinja2 is the natural equivalent (Python's `string.Template` can't do
+  loops/conditionals over the updated/failed/stale lists the way a Report needs to render); the
+  existing `Session` dataclass (`core/session.py`) already maps directly onto Watchtower's Report
+  buckets, so it — not a new data model — would be the template context. New settings:
+  `LOOKOUT_NOTIFICATION_TEMPLATE` (raw Jinja2 string, optional CLI flag) and a title override,
+  defaulting to rendering the same text `summary()` produces today when unset. `summary()` itself
+  should stay as plain Python for the local log line in `cli.py` — that's console/debug output, not
+  a user-facing notification, and doesn't need to go through the template engine. Two things to get
+  right that Go templates don't need: construct the Jinja2 `Environment` with `autoescape=False`
+  (these are plain-text bodies, not HTML — autoescaping would mangle characters like `<` in image
+  names), and use `jinja2.sandbox.SandboxedEnvironment` rather than the plain one — cheap insurance
+  against SSTI-style gadgets even though the template string is operator-supplied, not attacker
+  input.
 - **Notification log-level filtering.** lookout has no equivalent of Watchtower's
   `--notifications-level`. It can only send the fixed per-run summary and startup message, with no
   way to route arbitrary application log lines (for example WARN and above) to a notification
