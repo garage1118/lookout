@@ -23,11 +23,24 @@ def _deliver(notification_urls: list[str], body: str, title: str) -> None:
         logger.warning("one or more notifications failed to send")
 
 
-def send(session: Session, notification_urls: list[str], only_on_change: bool = False) -> None:
+def _title(base: str, scope: str | None) -> str:
+    """Distinguishes which instance a notification came from when several
+    scoped lookouts share the same notification target (e.g. one Telegram
+    bot) -- otherwise indistinguishable run summaries from different
+    instances would arrive with no way to tell them apart."""
+    return f"{base} [{scope}]" if scope else base
+
+
+def send(
+    session: Session,
+    notification_urls: list[str],
+    only_on_change: bool = False,
+    scope: str | None = None,
+) -> None:
     if only_on_change and not session.has_activity():
         return
-    _deliver(notification_urls, session.summary(), "lookout run summary")
+    _deliver(notification_urls, session.summary(), _title("lookout run summary", scope))
 
 
-def send_startup(notification_urls: list[str]) -> None:
-    _deliver(notification_urls, f"lookout v{__version__} started", "lookout started")
+def send_startup(notification_urls: list[str], scope: str | None = None) -> None:
+    _deliver(notification_urls, f"lookout v{__version__} started", _title("lookout started", scope))

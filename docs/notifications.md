@@ -64,6 +64,18 @@ two messages: startup, then the run summary. It is independent of `--notify-only
 only gates the per-run summary. The message is fixed and minimal — `lookout v0.1.0 started` —
 matching the run summary's non-templated report format below.
 
+## Scoped instances
+
+If `--scope`/`LOOKOUT_SCOPE` is set (see
+[Container selection](container-selection.md#scope-split-a-daemon-between-several-instances)),
+every notification's title gets the scope appended, e.g. `lookout run summary [dev]` instead of
+`lookout run summary`. This applies to both the per-run summary and the startup notification. It
+matters most when several scoped instances share the same notification target — for example one
+Telegram bot for both a fast dev-registry instance and the default instance — since otherwise their
+messages would be indistinguishable. Apprise services without a native title field (Telegram is one
+of them) fold the title into the message body instead of dropping it, so the scope still shows up
+even there.
+
 ## Report format
 
 The message body is a fixed, plain-text summary. There is no template customization — Watchtower

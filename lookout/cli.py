@@ -139,7 +139,7 @@ def main(
 
     if settings.notify_on_startup:
         try:
-            send_startup(settings.notification_urls)
+            send_startup(settings.notification_urls, settings.scope)
         except Exception:
             logger.exception("failed to send startup notification")
 
@@ -165,7 +165,9 @@ def main(
         session = run_update(docker_client, registry_client, settings)
         logger.info(session.summary())
         try:
-            send_notifications(session, settings.notification_urls, settings.notify_only_on_change)
+            send_notifications(
+                session, settings.notification_urls, settings.notify_only_on_change, settings.scope
+            )
         except Exception:
             # The update work above already completed (successfully or not,
             # and is already recorded in the log line above) -- a

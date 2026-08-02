@@ -47,6 +47,19 @@ def test_send_adds_each_url_and_notifies_with_summary(monkeypatch: Any) -> None:
     assert instance.notified == [{"body": session.summary(), "title": "lookout run summary"}]
 
 
+def test_send_appends_scope_to_title_when_scoped(monkeypatch: Any) -> None:
+    FakeApprise.instances = []
+    monkeypatch.setattr("lookout.notifications.notify.apprise.Apprise", FakeApprise)
+
+    session = Session()
+    send(session, ["slack://token@channel"], scope="dev")
+
+    instance = FakeApprise.instances[0]
+    assert instance.notified == [
+        {"body": session.summary(), "title": "lookout run summary [dev]"}
+    ]
+
+
 def test_send_logs_warning_when_url_fails_to_parse(monkeypatch: Any, caplog: Any) -> None:
     FakeApprise.instances = []
     monkeypatch.setattr("lookout.notifications.notify.apprise.Apprise", FakeApprise)
@@ -134,6 +147,20 @@ def test_send_startup_notifies_with_fixed_message(monkeypatch: Any) -> None:
     assert instance.added == ["slack://token@channel"]
     assert instance.notified == [
         {"body": f"lookout v{__version__} started", "title": "lookout started"}
+    ]
+
+
+def test_send_startup_appends_scope_to_title_when_scoped(monkeypatch: Any) -> None:
+    from lookout import __version__
+
+    FakeApprise.instances = []
+    monkeypatch.setattr("lookout.notifications.notify.apprise.Apprise", FakeApprise)
+
+    send_startup(["slack://token@channel"], scope="dev")
+
+    instance = FakeApprise.instances[0]
+    assert instance.notified == [
+        {"body": f"lookout v{__version__} started", "title": "lookout started [dev]"}
     ]
 
 

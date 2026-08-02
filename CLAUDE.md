@@ -119,7 +119,10 @@ Each module's job:
   worth closing by default rather than requiring every general-purpose instance to remember an
   extra flag. Unlike Watchtower, lookout also does not try to detect or stop sibling instances in
   other scopes (Watchtower's `CheckForMultipleWatchtowerInstances` kills all but the most recently
-  started one) — scoping here is purely cooperative, not competitive.
+  started one) — scoping here is purely cooperative, not competitive. `notifications/notify.py`'s
+  `send()`/`send_startup()` append `[scope]` to the notification title when `settings.scope` is
+  set, so several scoped instances sharing one notification target (e.g. one Telegram bot) produce
+  distinguishable messages instead of identical ones.
 - **`core/updater.py`** — orchestration. `_is_stale()` is the real staleness check: it trusts
   `Container.has_digest()` when it says fresh, but when that comes back `False` it falls back to
   `DockerClient.find_local_image_id()` (looks up whatever local image currently carries the

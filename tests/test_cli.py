@@ -22,6 +22,12 @@ class FakeRegistryClient:
     pass
 
 
+def _noop_send_notifications(
+    session: Any, urls: Any, only_on_change: bool = False, scope: Any = None
+) -> None:
+    return None
+
+
 def test_version_flag_prints_version_and_exits() -> None:
     result = CliRunner().invoke(cli_module.main, ["--version"])
 
@@ -44,9 +50,7 @@ def test_include_exclude_split_comma_separated_values(monkeypatch: Any) -> None:
         "run_update",
         lambda dc, rc, settings: captured_settings.append(settings) or Session(),
     )
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -70,9 +74,7 @@ def test_run_once_wires_flags_into_settings(monkeypatch: Any) -> None:
         "run_update",
         lambda dc, rc, settings: captured_settings.append(settings) or Session(),
     )
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -120,9 +122,7 @@ def test_omitted_flags_leave_settings_defaults(monkeypatch: Any) -> None:
         "run_update",
         lambda dc, rc, settings: captured_settings.append(settings) or Session(),
     )
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     runner = CliRunner()
     result = runner.invoke(cli_module.main, ["--run-once"])
@@ -141,9 +141,7 @@ def test_interval_mode_invokes_scheduler_with_parsed_interval(monkeypatch: Any) 
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     captured = {}
 
@@ -164,18 +162,46 @@ def test_notify_on_startup_calls_send_startup_once(monkeypatch: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     startup_calls: list[list[str]] = []
-    monkeypatch.setattr(cli_module, "send_startup", lambda urls: startup_calls.append(urls))
+    monkeypatch.setattr(
+        cli_module, "send_startup", lambda urls, scope=None: startup_calls.append(urls)
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_module.main, ["--run-once", "--notify-on-startup"])
 
     assert result.exit_code == 0, result.output
     assert len(startup_calls) == 1
+
+
+def test_scope_is_passed_through_to_notifications(monkeypatch: Any) -> None:
+    # Two scoped lookout instances sharing one notification target (e.g. the
+    # same Telegram bot) need some way to tell their messages apart.
+    monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
+    monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
+    monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
+
+    notify_calls = []
+    monkeypatch.setattr(
+        cli_module,
+        "send_notifications",
+        lambda session, urls, only_on_change=False, scope=None: notify_calls.append(scope),
+    )
+    startup_calls = []
+    monkeypatch.setattr(
+        cli_module, "send_startup", lambda urls, scope=None: startup_calls.append(scope)
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.main, ["--run-once", "--notify-on-startup", "--scope", "dev"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert notify_calls == ["dev"]
+    assert startup_calls == ["dev"]
 
 
 def test_run_once_succeeds_despite_notification_send_failure(monkeypatch: Any) -> None:
@@ -187,7 +213,9 @@ def test_run_once_succeeds_despite_notification_send_failure(monkeypatch: Any) -
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
 
-    def failing_send(session: Any, urls: Any, only_on_change: bool = False) -> None:
+    def failing_send(
+        session: Any, urls: Any, only_on_change: bool = False, scope: Any = None
+    ) -> None:
         raise RuntimeError("notification backend exploded")
 
     monkeypatch.setattr(cli_module, "send_notifications", failing_send)
@@ -202,11 +230,9 @@ def test_run_once_succeeds_despite_startup_notification_failure(monkeypatch: Any
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
-    def failing_send_startup(urls: Any) -> None:
+    def failing_send_startup(urls: Any, scope: Any = None) -> None:
         raise RuntimeError("notification backend exploded")
 
     monkeypatch.setattr(cli_module, "send_startup", failing_send_startup)
@@ -233,9 +259,7 @@ def test_swarm_active_logs_warning_but_still_runs(
     monkeypatch.setattr(
         cli_module, "run_update", lambda dc, rc, settings: run_calls.append(1) or Session()
     )
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     with caplog.at_level("WARNING", logger="lookout.cli"):
         result = CliRunner().invoke(cli_module.main, ["--run-once"])
@@ -249,9 +273,7 @@ def test_swarm_inactive_logs_no_warning(monkeypatch: Any, caplog: Any) -> None:
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     with caplog.at_level("WARNING", logger="lookout.cli"):
         result = CliRunner().invoke(cli_module.main, ["--run-once"])
@@ -264,12 +286,12 @@ def test_notify_on_startup_not_called_when_flag_omitted(monkeypatch: Any) -> Non
     monkeypatch.setattr(cli_module, "DockerPyClient", FakeDockerClient)
     monkeypatch.setattr(cli_module, "RegistryClient", FakeRegistryClient)
     monkeypatch.setattr(cli_module, "run_update", lambda dc, rc, settings: Session())
-    monkeypatch.setattr(
-        cli_module, "send_notifications", lambda session, urls, only_on_change=False: None
-    )
+    monkeypatch.setattr(cli_module, "send_notifications", _noop_send_notifications)
 
     startup_calls: list[list[str]] = []
-    monkeypatch.setattr(cli_module, "send_startup", lambda urls: startup_calls.append(urls))
+    monkeypatch.setattr(
+        cli_module, "send_startup", lambda urls, scope=None: startup_calls.append(urls)
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_module.main, ["--run-once"])
