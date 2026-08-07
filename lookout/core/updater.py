@@ -87,13 +87,18 @@ def run(
                 container.image_name, auth, cache=registry_auth_cache
             )
             stale = _is_stale(docker_client, container, latest_digest)
-        except Exception:
+        except Exception as exc:
             # Covers both a registry-side failure (above) and a Docker-side
             # one (_is_stale's find_local_image_id fallback) -- either way
             # this container's staleness couldn't be determined, and a
             # transient Docker API hiccup on one container shouldn't abort
             # the whole run and skip every container after it.
-            logger.exception("failed to check %s for updates", container.name)
+            logger.error(
+                "failed to check %s for updates: %s",
+                container.name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
             session.skipped.append((container, "check failed"))
             continue
         if stale:
@@ -126,7 +131,12 @@ def run(
                 )
             )
         except Exception as exc:
-            logger.exception("failed to pull a new image for %s", container.name)
+            logger.error(
+                "failed to pull a new image for %s: %s",
+                container.name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
             session.failed.append((container, exc))
 
     # A container with no network-mode dependency whose resolved image is
@@ -158,7 +168,12 @@ def run(
             docker_client.stop(container, timeout=settings.stop_timeout_seconds)
             stopped.append(container)
         except Exception as exc:
-            logger.exception("failed to stop %s", container.name)
+            logger.error(
+                "failed to stop %s: %s",
+                container.name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
             session.failed.append((container, exc))
 
     recreated_names: set[str] = set()
@@ -198,11 +213,21 @@ def run(
             # successful update into a "failed" one.
             try:
                 lifecycle.post_update(docker_client, new_container)
-            except Exception:
-                logger.exception("post-update hook errored on %s", new_container.name)
+            except Exception as exc:
+                logger.error(
+                    "post-update hook errored on %s: %s",
+                    new_container.name,
+                    exc,
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
+                )
             session.updated.append(new_container)
         except Exception as exc:
-            logger.exception("failed to update %s", container.name)
+            logger.error(
+                "failed to update %s: %s",
+                container.name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
             session.failed.append((container, exc))
 
     if settings.cleanup:

@@ -303,46 +303,56 @@ class DockerPyClient:
             if new_container is not None:
                 try:
                     new_container.remove(force=True)
-                except Exception:
-                    logger.exception(
+                except Exception as cleanup_exc:
+                    logger.error(
                         "failed to clean up half-created container %s while rolling back "
-                        "recreate() of %s",
+                        "recreate() of %s: %s",
                         new_container.id,
                         container.name,
+                        cleanup_exc,
+                        exc_info=logger.isEnabledFor(logging.DEBUG),
                     )
             try:
                 self.rename(container, container.name)
-            except Exception:
+            except Exception as rename_exc:
                 # Left as <name>-lookout-old; _remove_stale_temp_container()
                 # clears it out of the way before this container's next
                 # recreate() attempt.
-                logger.exception(
+                logger.error(
                     "failed to rename %s back to its original name during recreate "
-                    "rollback -- it will remain as %s until the next recreate",
+                    "rollback -- it will remain as %s until the next recreate: %s",
                     container.name,
                     temp_name,
+                    rename_exc,
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
                 )
             try:
                 self._client.containers.get(container.id).start()
-            except Exception:
-                logger.exception(
-                    "failed to restart %s after rolling back a failed recreate", container.name
+            except Exception as restart_exc:
+                logger.error(
+                    "failed to restart %s after rolling back a failed recreate: %s",
+                    container.name,
+                    restart_exc,
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
                 )
             raise
 
         try:
             self._client.containers.get(container.id).remove()
-        except Exception:
+        except Exception as exc:
             # The update itself already succeeded (new_container is created,
             # network-attached, and running) -- don't let a cleanup failure
             # here turn that into a reported failure. Left behind as
             # <name>-lookout-old; cleaned up automatically by
             # _remove_stale_temp_container() on this container's next
             # recreate(), whenever that next happens.
-            logger.exception(
-                "recreate of %s succeeded but removing the old container (renamed to %s) failed",
+            logger.error(
+                "recreate of %s succeeded but removing the old container (renamed to %s) "
+                "failed: %s",
                 container.name,
                 temp_name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
             )
 
         return Container.from_inspect(self._client.containers.get(new_container.id).attrs)
@@ -359,9 +369,12 @@ class DockerPyClient:
             self._client.containers.get(temp_name).remove(force=True)
         except docker_sdk.errors.NotFound:
             pass
-        except Exception:
-            logger.exception(
-                "failed to remove stale leftover container %s before recreate", temp_name
+        except Exception as exc:
+            logger.error(
+                "failed to remove stale leftover container %s before recreate: %s",
+                temp_name,
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
             )
 
     def _create(self, create_kwargs: dict[str, Any]) -> Any:

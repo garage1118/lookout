@@ -140,8 +140,12 @@ def main(
     if settings.notify_on_startup:
         try:
             send_startup(settings.notification_urls, settings.scope)
-        except Exception:
-            logger.exception("failed to send startup notification")
+        except Exception as exc:
+            logger.error(
+                "failed to send startup notification: %s",
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
 
     docker_client = DockerPyClient(docker_host=settings.docker_host)
     registry_client = RegistryClient()
@@ -168,14 +172,18 @@ def main(
             send_notifications(
                 session, settings.notification_urls, settings.notify_only_on_change, settings.scope
             )
-        except Exception:
+        except Exception as exc:
             # The update work above already completed (successfully or not,
             # and is already recorded in the log line above) -- a
             # notification-delivery bug shouldn't turn a --run-once pass
             # that otherwise succeeded into a nonzero exit, nor (in daemon
             # mode) get misreported by run_forever's generic "run failed" as
             # if the poll itself had failed.
-            logger.exception("failed to send run-summary notification")
+            logger.error(
+                "failed to send run-summary notification: %s",
+                exc,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
 
     if run_once:
         job()

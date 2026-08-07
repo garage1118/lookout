@@ -31,8 +31,8 @@ def run_forever(job: Callable[[], None], interval_seconds: int) -> None:
     while not stop_requested:
         try:
             job()
-        except Exception:
-            logger.exception("run failed")
+        except Exception as exc:
+            logger.error("run failed: %s", exc, exc_info=logger.isEnabledFor(logging.DEBUG))
 
         for _ in range(interval_seconds):
             if stop_requested:
