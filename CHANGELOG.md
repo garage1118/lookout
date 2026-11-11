@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] - 2026-11-10
+
+### Security
+
+- Docker image: run `apk upgrade` and upgrade the base image's bundled `pip`, fixing the OpenSSL
+  (`libssl3`/`libcrypto3`), util-linux (`libuuid`), `musl` and `zlib` findings reported by Trivy.
+- Updated locked dependencies `certifi` (2026.10.23), `urllib3` (2.8.0) and `oauthlib` (4.0.1) to
+  pick up published security fixes.
+
 ## [1.1.1] - 2026-08-02
 
 ### Fixed
@@ -86,6 +95,7 @@ First stable release.
 - Run-summary notifications through Apprise
 - Docker Hub images for `linux/amd64` and `linux/arm64`
 
+[1.1.2]: https://github.com/garage1118/lookout/releases/tag/v1.1.2
 [1.1.1]: https://github.com/garage1118/lookout/releases/tag/v1.1.1
 [1.1.0]: https://github.com/garage1118/lookout/releases/tag/v1.1.0
 [1.0.2]: https://github.com/garage1118/lookout/releases/tag/v1.0.2

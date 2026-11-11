@@ -11,6 +11,11 @@ RUN uv sync --no-dev --frozen
 
 FROM python:3.12-alpine
 
+# Pick up Alpine security fixes published since the base image was built, and
+# upgrade the base image's bundled pip (lookout itself never uses it).
+RUN apk upgrade --no-cache \
+    && pip install --no-cache-dir --upgrade pip
+
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/lookout /app/lookout
